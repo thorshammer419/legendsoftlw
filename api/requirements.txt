@@ -1,0 +1,8 @@
+azure-functions
+azure-durable-functions
+azure-cosmos
+azure-search-documents
+azure-communication-email
+azure-identity
+azure-keyvault-secrets
+openai

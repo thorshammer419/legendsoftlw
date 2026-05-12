@@ -191,38 +191,14 @@ Store these secrets:
 - STORAGE-CONNECTION-STRING
 - COMMS-CONNECTION-STRING
 
-## Step 10: Azure OpenAI (after approval)
+## Step 10: Azure OpenAI ✅ DONE
 
-```bash
-az cognitiveservices account create \
-  --name legendsoftlw-openai \
-  --resource-group legends-of-tlw-rg \
-  --kind OpenAI \
-  --sku S0 \
-  --location eastus
+Provisioned manually via Azure portal in Central US region.
 
-# Deploy GPT-4.1
-az cognitiveservices account deployment create \
-  --name legendsoftlw-openai \
-  --resource-group legends-of-tlw-rg \
-  --deployment-name gpt-41 \
-  --model-name gpt-4.1 \
-  --model-version latest \
-  --model-format OpenAI \
-  --sku-capacity 10 \
-  --sku-name Standard
-
-# Deploy GPT-4.1-mini
-az cognitiveservices account deployment create \
-  --name legendsoftlw-openai \
-  --resource-group legends-of-tlw-rg \
-  --deployment-name gpt-41-mini \
-  --model-name gpt-4.1-mini \
-  --model-version latest \
-  --model-format OpenAI \
-  --sku-capacity 20 \
-  --sku-name Standard
-```
+- **Resource:** oai-thorshammer419-centralus
+- **Endpoint:** https://oai-thorshammer419-centralus.openai.azure.com/
+- **GPT-4.1 deployment:** tlw-gpt-4.1
+- **GPT-4.1-mini deployment:** tlw-gpt-4.1-mini
 
 ## Step 11: Azure Static Web Apps
 
@@ -257,10 +233,10 @@ After creation:
     "SEARCH_API_KEY": "YOUR_SEARCH_API_KEY",
     "SEARCH_INDEX_NAME": "srd-index",
     "SIGNALR_CONNECTION_STRING": "YOUR_SIGNALR_CONNECTION_STRING",
-    "OPENAI_ENDPOINT": "https://legendsoftlw-openai.openai.azure.com/",
+    "OPENAI_ENDPOINT": "https://oai-thorshammer419-centralus.openai.azure.com/",
     "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY",
-    "OPENAI_NARRATIVE_DEPLOYMENT": "gpt-41",
-    "OPENAI_MINI_DEPLOYMENT": "gpt-41-mini",
+    "OPENAI_NARRATIVE_DEPLOYMENT": "tlw-gpt-4.1",
+    "OPENAI_MINI_DEPLOYMENT": "tlw-gpt-4.1-mini",
     "STORAGE_CONNECTION_STRING": "YOUR_STORAGE_CONNECTION_STRING",
     "COMMS_CONNECTION_STRING": "YOUR_COMMS_CONNECTION_STRING",
     "COMMS_SENDER_EMAIL": "noreply@legendsoftlw.app"

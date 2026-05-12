@@ -1,0 +1,16 @@
+# Secrets
+.env
+api/local.settings.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+web/build/
+
+# Data (large files)
+data/srd_json/*.json
+data/srd_markdown/*.md

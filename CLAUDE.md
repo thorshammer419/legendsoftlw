@@ -18,9 +18,9 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] GitHub repo created
 - [x] Domain registered (legendsoftlw.app) on Cloudflare
 - [x] Facebook Messenger webhook validated (throwaway — abandoned in favor of web app)
-- [ ] Folder structure created in repo
-- [ ] Azure infrastructure provisioned
-- [ ] Azure OpenAI access requested
+- [x] Folder structure created in repo
+- [x] Azure infrastructure provisioned
+- [x] Azure OpenAI access requested (already had access — deployed directly)
 - [ ] SRD data downloaded and indexed
 - [ ] Any application code written
 

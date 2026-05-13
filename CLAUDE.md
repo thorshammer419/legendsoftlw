@@ -34,6 +34,8 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Create campaign form includes Party Name field; errors displayed at top of page
 - [x] Bug fixes: delete campaign (missing import), create campaign error handling, SignalR broadcast delivery
 - [x] Tested end-to-end: create → character → lobby → launch navigates to game ✓
+- [x] Game screen: campaign background image (tlw_campaign_bg.png) with semi-transparent panel overlays
+- [x] Game screen: narrative feed seeded from narrative log on page load (campaign intro now visible on entry)
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR

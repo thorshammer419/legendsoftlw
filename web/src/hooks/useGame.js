@@ -20,9 +20,20 @@ export function useGame(campaignId) {
       setCampaign(camp);
       setSubmitted(!!state.story_state?.pending_actions?.[state.character?.email]);
 
-      // Seed feed with current scene image if we have one and feed is empty
+      // Seed feed from narrative log on initial load
+      const rounds = state.narrative_log || [];
       const imageUrl = state.story_state?.scene_image_url;
-      if (imageUrl) {
+      if (rounds.length > 0) {
+        setNarrativeFeed((prev) => {
+          if (prev.length > 0) return prev;
+          return rounds.map((r, i) => ({
+            round_number: r.round,
+            narrative: r.narrative,
+            // Only attach the current scene image to the latest entry
+            scene_image_url: i === rounds.length - 1 ? imageUrl : undefined,
+          }));
+        });
+      } else if (imageUrl) {
         setNarrativeFeed((prev) => {
           if (prev.length > 0) return prev;
           return [{

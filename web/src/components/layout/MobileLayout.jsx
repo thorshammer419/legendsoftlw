@@ -16,7 +16,11 @@ export default function MobileLayout({
   const campaignId = campaign?.campaign_id || campaign?.id?.replace('campaign_', '');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100%',
+      backgroundImage: 'url(/tlw_campaign_bg.png)',
+      backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'local',
+    }}>
       {/* App bar */}
       <div className="app-bar">
         <button className="btn btn-ghost btn-sm" onClick={() => setLeftOpen(true)}>☰ Sheet</button>
@@ -28,12 +32,12 @@ export default function MobileLayout({
       </div>
 
       {/* Narrative feed — main content */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'rgba(10,10,18,0.65)' }}>
         <NarrativeFeed feed={narrativeFeed} submitted={submitted} partyStatus={partyStatus} />
       </div>
 
       {/* Action panel — pinned to bottom */}
-      <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0, maxHeight: '45vh', overflow: 'hidden' }}>
+      <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0, maxHeight: '45vh', overflow: 'hidden', background: 'rgba(10,10,18,0.82)' }}>
         <ActionPanel
           character={character}
           storyState={storyState}

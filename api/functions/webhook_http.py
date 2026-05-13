@@ -314,12 +314,14 @@ async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
     character = get_character({"campaign_id": campaign_id, "email": email})
     action_list = get_action_list({"campaign_id": campaign_id, "email": email})
     campaign_players = get_campaign_players(campaign_id)
+    narrative_log = get_narrative_log(campaign_id)
 
     pending = story_state.get("pending_actions", {})
     return _json_response({
         "story_state": story_state,
         "character": character,
         "action_list": action_list,
+        "narrative_log": narrative_log.get("rounds", []),
         "party_status": [
             {
                 "email": p["email"],

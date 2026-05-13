@@ -135,7 +135,7 @@ GET /campaigns/{id} → auto-join if not a member → "player-join" queue
 | POST | /campaigns | user | Create campaign (status: lobby) |
 | GET | /campaigns/:id | user | Get campaign (auto-joins new players) |
 | DELETE | /campaigns/:id | admin | Soft-delete campaign |
-| GET | /campaigns/:id/state | user | Get story state, character, action list, party status |
+| GET | /campaigns/:id/state | user | Get story state, character, action list, party status, narrative log |
 | GET | /campaigns/:id/character | user | Get own character |
 | PUT | /campaigns/:id/character | user | Save character (broadcasts player_ready to lobby) |
 | POST | /campaigns/:id/submit-action | user | Submit round action |
@@ -146,6 +146,12 @@ GET /campaigns/{id} → auto-join if not a member → "player-join" queue
 | POST | /campaigns/:id/admin/start-round | admin | Force-resolve current round |
 | POST | /campaigns/:id/admin/toggle-player | admin | Activate/deactivate a player |
 | POST | /campaigns/:id/admin/export-novel | admin | Queue novel PDF export |
+
+## Game Screen
+
+- Background: `tlw_campaign_bg.png` (full-bleed cover) with semi-transparent dark overlays on each panel (left/center/right) so text remains readable against the image.
+- Narrative feed is seeded from the `narrative_log` on initial page load so the campaign intro (round 0) and any previous round narratives are visible immediately — players don't need to wait for a live SignalR event to see past content.
+- The current `scene_image_url` from `story_state` is attached to the most recent narrative log entry in the feed.
 
 ## Error Handling
 - Queue poison-message queues catch repeated failures (Azure default: 5 retries)

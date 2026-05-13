@@ -14,7 +14,11 @@ export default function GameLayout({
   const campaignId = campaign?.campaign_id || campaign?.id?.replace('campaign_', '');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100%',
+      backgroundImage: 'url(/tlw_campaign_bg.png)',
+      backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'local',
+    }}>
       {/* App bar */}
       <div className="app-bar">
         <div>
@@ -32,7 +36,7 @@ export default function GameLayout({
       {/* Three-panel layout */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: Character Sheet */}
-        <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)' }}>
+        <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'rgba(10,10,18,0.82)' }}>
           <CharacterPanel
             character={character}
             actionEconomy={actionEconomy}
@@ -41,7 +45,7 @@ export default function GameLayout({
         </div>
 
         {/* Center: Narrative + Action Panel */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'rgba(10,10,18,0.65)' }}>
           <NarrativeFeed feed={narrativeFeed} submitted={submitted} partyStatus={partyStatus} />
           <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
             <ActionPanel
@@ -57,7 +61,7 @@ export default function GameLayout({
         </div>
 
         {/* Right: Quest + Party */}
-        <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+        <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'rgba(10,10,18,0.82)', overflow: 'hidden' }}>
           <div className="scroll" style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
             <PartyStatus partyStatus={partyStatus} submitted={submitted} />
             <hr className="divider" />

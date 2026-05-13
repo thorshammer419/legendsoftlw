@@ -59,6 +59,27 @@ def broadcast_narrative(input_data: dict) -> None:
     _post(url, token, payload)
 
 
+def broadcast_lobby_event(input_data: dict) -> None:
+    """
+    Broadcasts a lobby event (chat message, player ready, campaign launched) to
+    all players in the campaign SignalR group.
+    input_data: campaign_id + any event fields (type, display_name, text, email, ...)
+    """
+    conn_str = os.environ["SIGNALR_CONNECTION_STRING"]
+    hub = "LegendsHub"
+    endpoint, key = _parse_connection_string(conn_str)
+
+    campaign_id = input_data["campaign_id"]
+    url = f"{endpoint}/api/v1/hubs/{hub}/groups/{campaign_id}"
+    token = _make_token(key, url)
+
+    payload = {
+        "target": "lobbyEvent",
+        "arguments": [input_data],
+    }
+    _post(url, token, payload)
+
+
 def get_signalr_connection_info(input_data: dict) -> dict:
     """
     Returns the connection URL and access token for a client to connect to SignalR.

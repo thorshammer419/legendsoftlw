@@ -12,6 +12,8 @@ export default function Admin({ user, isAdmin }) {
   const [error, setError] = useState(null);
   const [starting, setStarting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [notification, setNotification] = useState(null);
 
   const load = async () => {
@@ -58,6 +60,21 @@ export default function Admin({ user, isAdmin }) {
       notify(`Error: ${err.message}`);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const deleteCampaign = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteCampaign(campaignId);
+      // Remove from localStorage cache
+      const stored = JSON.parse(localStorage.getItem('my_campaigns') || '[]');
+      localStorage.setItem('my_campaigns', JSON.stringify(stored.filter((c) => c.campaign_id !== campaignId)));
+      navigate('/');
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -191,6 +208,48 @@ export default function Admin({ user, isAdmin }) {
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
             Generates a professionally formatted PDF novel from the campaign narrative. Sent via email when complete.
           </p>
+        </div>
+
+        {/* Danger zone */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, border: '1px solid var(--danger)' }}>
+          <h3 style={{ margin: 0, color: 'var(--danger)' }}>Danger Zone</h3>
+          {!confirmDelete ? (
+            <>
+              <button
+                className="btn btn-full"
+                style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)' }}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete Campaign
+              </button>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                Permanently removes this campaign. This cannot be undone.
+              </p>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', margin: 0, fontWeight: 600 }}>
+                Are you sure? This will permanently delete "{campaign?.name}" and all its data.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-full"
+                  style={{ background: 'var(--danger)', border: 'none', color: '#fff' }}
+                  onClick={deleteCampaign}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Yes, delete it'}
+                </button>
+                <button
+                  className="btn btn-secondary btn-full"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
       </div>

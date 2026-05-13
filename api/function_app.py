@@ -92,6 +92,21 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.admin_export_novel(req)
 
 
+@app.route(route="campaigns/{campaign_id}/lobby/message", methods=["POST"])
+async def lobby_message(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.lobby_message_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/lobby/launch", methods=["POST"])
+async def lobby_launch(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.lobby_launch_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}", methods=["DELETE"])
+async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.delete_campaign_handler(req)
+
+
 # ===========================================================================
 # Timer trigger — checks for expired round deadlines every 15 minutes
 # ===========================================================================

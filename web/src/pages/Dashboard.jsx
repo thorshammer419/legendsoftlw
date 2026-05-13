@@ -47,13 +47,17 @@ export default function Dashboard({ user }) {
               <div key={c.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div
                   style={{ flex: 1, cursor: 'pointer' }}
-                  onClick={() => navigate(c.status === 'completed' ? `/campaigns/${c.campaign_id}/archive` : `/game/${c.campaign_id}`)}
+                  onClick={() => {
+                    if (c.status === 'completed') navigate(`/campaigns/${c.campaign_id}/archive`);
+                    else if (c.status === 'lobby') navigate(`/campaigns/${c.campaign_id}/lobby`);
+                    else navigate(`/game/${c.campaign_id}`);
+                  }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.party_name}</div>
                 </div>
-                <span className={`badge ${c.status === 'active' ? 'badge-green' : c.status === 'completed' ? 'badge-gold' : 'badge-gray'}`}>
-                  {c.status}
+                <span className={`badge ${c.status === 'active' ? 'badge-green' : c.status === 'lobby' ? 'badge-gold' : c.status === 'completed' ? 'badge-gold' : 'badge-gray'}`}>
+                  {c.status === 'lobby' ? 'in lobby' : c.status}
                 </span>
                 <button
                   className="btn btn-ghost btn-sm"

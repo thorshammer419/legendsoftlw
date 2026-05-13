@@ -18,7 +18,7 @@ from functions.activities.cosmos import (
     get_action_list, get_narrative_log,
 )
 from functions.activities.action_validator import validate_freeform_action
-from functions.activities.signalr import get_signalr_connection_info
+from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
 from functions.activities.email import (
     send_player_reactivated_notification,
     send_player_inactive_notification,
@@ -207,7 +207,7 @@ async def create_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
         "name": body.get("name", "New Campaign"),
         "description": body.get("description", ""),
         "party_name": body.get("party_name", "The Adventurers"),
-        "status": "active",
+        "status": "lobby",
         "created_by": email,
         "created_at": now,
         "admin_emails": [email],
@@ -318,7 +318,12 @@ async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
         "character": character,
         "action_list": action_list,
         "party_status": [
-            {"email": p["email"], "submitted": p["email"] in pending}
+            {
+                "email": p["email"],
+                "submitted": p["email"] in pending,
+                "character_ready": p.get("character_creation_complete", False),
+                "role": p.get("role", "player"),
+            }
             for p in campaign_players if p.get("status") == "active"
         ],
     })
@@ -363,11 +368,23 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
         cp["character_creation_complete"] = True
         upsert_campaign_player(cp)
 
-        # Fire campaign intro when the first character finishes creation
+        # Notify the lobby that this player is ready
         if not was_complete:
-            story_state = get_story_state(campaign_id)
-            if story_state.get("round_number", 0) == 0:
-                _enqueue("campaign-intro", {"campaign_id": campaign_id})
+            player = get_player(email)
+            display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+            char_name = body.get("name", "")
+            char_class = body.get("class", "")
+            try:
+                broadcast_lobby_event({
+                    "campaign_id": campaign_id,
+                    "type": "player_ready",
+                    "email": email,
+                    "display_name": display_name,
+                    "char_name": char_name,
+                    "char_class": char_class,
+                })
+            except Exception:
+                pass
 
     return _json_response({"status": "saved"})
 
@@ -464,6 +481,85 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
 
     _enqueue("novel-export", {"campaign_id": campaign_id})
     return _json_response({"status": "export_queued"})
+
+
+# ---------------------------------------------------------------------------
+# Lobby
+# ---------------------------------------------------------------------------
+
+async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp or cp.get("status") != "active":
+        return _error("Not an active player in this campaign", 403)
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    text = (body.get("text") or "").strip()
+    if not text:
+        return _error("text required")
+
+    player = get_player(email)
+    display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+
+    broadcast_lobby_event({
+        "campaign_id": campaign_id,
+        "type": "chat",
+        "email": email,
+        "display_name": display_name,
+        "text": text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    return _json_response({"status": "sent"})
+
+
+async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    campaign = get_campaign(campaign_id)
+
+    if email not in campaign.get("admin_emails", []):
+        return _error("Admin access required", 403)
+
+    campaign["status"] = "active"
+    update_campaign(campaign)
+
+    _enqueue("campaign-intro", {"campaign_id": campaign_id})
+
+    broadcast_lobby_event({
+        "campaign_id": campaign_id,
+        "type": "launched",
+    })
+    return _json_response({"status": "launched"})
+
+
+async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        campaign = get_campaign(campaign_id)
+    except Exception:
+        return _error("Campaign not found", 404)
+
+    if email not in campaign.get("admin_emails", []):
+        return _error("Admin access required", 403)
+
+    campaign["status"] = "deleted"
+    update_campaign(campaign)
+    return _json_response({"status": "deleted"})
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,9 @@ export function useSignalR(campaignId, handlers = {}) {
       if (handlers.onNarrativeUpdate) {
         connection.on('narrativeUpdate', handlers.onNarrativeUpdate);
       }
+      if (handlers.onLobbyEvent) {
+        connection.on('lobbyEvent', handlers.onLobbyEvent);
+      }
 
       await connection.start();
       connRef.current = connection;

@@ -47,4 +47,14 @@ export const api = {
     }),
   exportNovel: (campaignId) =>
     req(`/campaigns/${campaignId}/admin/export-novel`, { method: 'POST' }),
+
+  sendLobbyMessage: (campaignId, text) =>
+    req(`/campaigns/${campaignId}/lobby/message`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  launchCampaign: (campaignId) =>
+    req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
+  deleteCampaign: (campaignId) =>
+    req(`/campaigns/${campaignId}`, { method: 'DELETE' }),
 };

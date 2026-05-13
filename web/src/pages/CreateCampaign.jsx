@@ -13,6 +13,7 @@ const TIMEZONES = [
 
 const DEFAULTS = {
   name: '',
+  party_name: '',
   description: '',
   max_players: 8,
   schedule: {
@@ -61,7 +62,8 @@ export default function CreateCampaign() {
 
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {
-      setError(err.message);
+      console.error('Create campaign failed:', err);
+      setError(err.message || 'Failed to create campaign. Check your connection and try again.');
       setSaving(false);
     }
   };
@@ -72,6 +74,12 @@ export default function CreateCampaign() {
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
         <h1 style={{ margin: 0 }}>New Campaign</h1>
       </div>
+
+      {error && (
+        <div style={{ color: 'var(--danger)', fontSize: 13, padding: '10px 14px', marginBottom: 8, background: 'rgba(233,69,96,0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger)' }}>
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -88,6 +96,17 @@ export default function CreateCampaign() {
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="The Dark Descent..."
               required
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="party_name">Party Name</label>
+            <input
+              id="party_name"
+              type="text"
+              value={form.party_name}
+              onChange={(e) => setForm((f) => ({ ...f, party_name: e.target.value }))}
+              placeholder="The Lord's Wrath..."
             />
           </div>
 
@@ -202,12 +221,6 @@ export default function CreateCampaign() {
             </div>
           )}
         </div>
-
-        {error && (
-          <div style={{ color: 'var(--danger)', fontSize: 13, padding: '10px 14px', background: 'rgba(233,69,96,0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger)' }}>
-            {error}
-          </div>
-        )}
 
         <button type="submit" className="btn btn-primary btn-full" disabled={saving || !form.name.trim()}>
           {saving ? 'Creating...' : 'Create Campaign →'}

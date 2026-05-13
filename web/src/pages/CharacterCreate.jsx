@@ -117,7 +117,7 @@ export default function CharacterCreate({ user }) {
         backstory: identity.backstory,
       };
       await api.saveCharacter(campaignId, character);
-      navigate(`/game/${campaignId}`);
+      navigate(`/campaigns/${campaignId}/lobby`);
     } catch (err) {
       setError(err.message);
       setSaving(false);

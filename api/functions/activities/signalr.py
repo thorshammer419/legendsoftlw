@@ -7,6 +7,7 @@ Players join a group named after their campaign_id when they connect.
 import json
 import os
 import time
+import urllib.parse
 import urllib.request
 import jwt
 
@@ -33,19 +34,26 @@ def _post(url: str, token: str, body: dict) -> int:
         return resp.status
 
 
+def _send_to_users(endpoint: str, key: str, hub: str, user_ids: list, payload: dict) -> None:
+    """Send a SignalR message to each user individually by their userId (email)."""
+    for user_id in user_ids:
+        try:
+            encoded = urllib.parse.quote(user_id, safe="")
+            url = f"{endpoint}/api/v1/hubs/{hub}/users/{encoded}"
+            token = _make_token(key, url)
+            _post(url, token, payload)
+        except Exception:
+            pass
+
+
 def broadcast_narrative(input_data: dict) -> None:
     """
-    Broadcasts the completed round narrative to all players in the campaign group.
-    input_data:
-      campaign_id, round_number, narrative, state_summary (dict)
+    Broadcasts the completed round narrative to all players in the campaign.
+    input_data: campaign_id, round_number, narrative, state_summary, player_emails
     """
     conn_str = os.environ["SIGNALR_CONNECTION_STRING"]
     hub = "LegendsHub"
     endpoint, key = _parse_connection_string(conn_str)
-
-    campaign_id = input_data["campaign_id"]
-    url = f"{endpoint}/api/v1/hubs/{hub}/groups/{campaign_id}"
-    token = _make_token(key, url)
 
     payload = {
         "target": "narrativeUpdate",
@@ -56,28 +64,24 @@ def broadcast_narrative(input_data: dict) -> None:
             "scene_image_url": input_data.get("scene_image_url"),
         }],
     }
-    _post(url, token, payload)
+    _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
 
 
 def broadcast_lobby_event(input_data: dict) -> None:
     """
     Broadcasts a lobby event (chat message, player ready, campaign launched) to
-    all players in the campaign SignalR group.
-    input_data: campaign_id + any event fields (type, display_name, text, email, ...)
+    all players in the campaign.
+    input_data: campaign_id, player_emails, type, + any event fields
     """
     conn_str = os.environ["SIGNALR_CONNECTION_STRING"]
     hub = "LegendsHub"
     endpoint, key = _parse_connection_string(conn_str)
 
-    campaign_id = input_data["campaign_id"]
-    url = f"{endpoint}/api/v1/hubs/{hub}/groups/{campaign_id}"
-    token = _make_token(key, url)
-
     payload = {
         "target": "lobbyEvent",
         "arguments": [input_data],
     }
-    _post(url, token, payload)
+    _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
 
 
 def get_signalr_connection_info(input_data: dict) -> dict:
@@ -91,7 +95,6 @@ def get_signalr_connection_info(input_data: dict) -> dict:
     endpoint, key = _parse_connection_string(conn_str)
 
     user_id = input_data["user_id"]
-    campaign_id = input_data["campaign_id"]
 
     client_url = f"{endpoint}/client/?hub={hub}"
     now = int(time.time())
@@ -100,8 +103,6 @@ def get_signalr_connection_info(input_data: dict) -> dict:
         "iat": now,
         "exp": now + 3600,
         "nameid": user_id,
-        # Puts the client into their campaign group automatically on connect
-        "role": [f"webpubsub.joinLeaveGroup.{campaign_id}", f"webpubsub.sendToGroup.{campaign_id}"],
     }
     access_token = jwt.encode(payload, key, algorithm="HS256")
 

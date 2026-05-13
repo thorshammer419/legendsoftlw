@@ -378,6 +378,7 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
             char_name = body.get("name", "")
             char_class = body.get("class", "")
             try:
+                all_players = get_campaign_players(campaign_id)
                 broadcast_lobby_event({
                     "campaign_id": campaign_id,
                     "type": "player_ready",
@@ -385,6 +386,7 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
                     "display_name": display_name,
                     "char_name": char_name,
                     "char_class": char_class,
+                    "player_emails": [p["email"] for p in all_players],
                 })
             except Exception:
                 pass
@@ -511,6 +513,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+    all_players = get_campaign_players(campaign_id)
 
     broadcast_lobby_event({
         "campaign_id": campaign_id,
@@ -519,6 +522,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
         "display_name": display_name,
         "text": text,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "player_emails": [p["email"] for p in all_players],
     })
     return _json_response({"status": "sent"})
 
@@ -539,9 +543,11 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     _enqueue("campaign-intro", {"campaign_id": campaign_id})
 
+    all_players = get_campaign_players(campaign_id)
     broadcast_lobby_event({
         "campaign_id": campaign_id,
         "type": "launched",
+        "player_emails": [p["email"] for p in all_players],
     })
     return _json_response({"status": "launched"})
 

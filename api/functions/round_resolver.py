@@ -147,6 +147,7 @@ def resolve_round(campaign_id: str):
         "round_number": round_number,
         "narrative": narrative,
         "scene_image_url": scene_image_url,
+        "player_emails": [p["email"] for p in campaign_players],
         "state_summary": {
             "scene_type": scene_type,
             "current_scene": state_update.get("current_scene", {}),
@@ -264,10 +265,12 @@ def player_join_from_queue(msg) -> None:
         })
 
         round_number = story_state.get("round_number", 0)
+        all_players = get_campaign_players(campaign_id)
         broadcast_narrative({
             "campaign_id": campaign_id,
             "round_number": round_number,
             "narrative": introduction,
+            "player_emails": [p["email"] for p in all_players],
             "state_summary": {"event": "player_joined", "email": email},
         })
         logger.info("Player join flow complete for %s in %s", email, campaign_id)
@@ -327,11 +330,13 @@ def campaign_intro_from_queue(msg) -> None:
         _container = _db.get_container_client("game")
         _append_narrative_round(_container, campaign_id, 0, narrative)
 
+        all_players = get_campaign_players(campaign_id)
         broadcast_narrative({
             "campaign_id": campaign_id,
             "round_number": 0,
             "narrative": narrative,
             "scene_image_url": scene_image_url,
+            "player_emails": [p["email"] for p in all_players],
             "state_summary": {"event": "campaign_intro"},
         })
         logger.info("Campaign intro sent for %s", campaign_id)

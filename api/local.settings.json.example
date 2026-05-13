@@ -14,11 +14,15 @@
 
     "SIGNALR_CONNECTION_STRING": "YOUR_SIGNALR_CONNECTION_STRING",
 
-    "OPENAI_ENDPOINT": "https://legendsoftlw-openai.openai.azure.com/",
-    "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY",
-    "OPENAI_NARRATIVE_DEPLOYMENT": "gpt-41",
-    "OPENAI_MINI_DEPLOYMENT": "gpt-41-mini",
-    "OPENAI_EMBEDDING_DEPLOYMENT": "text-embedding-ada-002",
+    "OPENAI_ENDPOINT": "https://oai-thorshammer419-centralus.openai.azure.com/",
+    "OPENAI_API_KEY": "YOUR_CENTRAL_US_OPENAI_KEY",
+    "OPENAI_NARRATIVE_DEPLOYMENT": "tlw-gpt-4.1",
+    "OPENAI_MINI_DEPLOYMENT": "tlw-gpt-4.1-mini",
+    "OPENAI_EMBEDDING_DEPLOYMENT": "tlw-text-embedding-ada-002",
+
+    "OPENAI_IMAGE_ENDPOINT": "https://tlw-openai-images.openai.azure.com/",
+    "OPENAI_IMAGE_API_KEY": "YOUR_EAST_US2_OPENAI_KEY",
+    "OPENAI_IMAGE_DEPLOYMENT": "tlw-gpt-image-1",
 
     "STORAGE_CONNECTION_STRING": "YOUR_STORAGE_CONNECTION_STRING",
 

@@ -26,14 +26,15 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Full Azure Functions backend built and deployed
 - [x] Microsoft login working (Azure SWA V1 auth mode)
 - [x] Round lifecycle working end-to-end (queue-based, not Durable Functions)
-- [x] Campaign intro narrative on first character save
+- [x] Campaign lobby — pre-game gathering room with real-time chat; admin launches campaign
+- [x] Campaign intro fires on admin launch (NOT on first character save — admin controls the start)
 - [x] Scene image generation per round (gpt-image-1, East US 2)
 - [x] Login page with logo + stone-gray title styling
+- [x] Delete campaign (soft delete, two-step confirmation in Admin page)
+- [x] Create campaign form includes Party Name field; errors displayed at top of page
 
 ## Immediate Next Steps
-- Test full round flow end-to-end with real players
-- Verify campaign intro fires correctly on first character save
-- Verify scene images appear in the narrative feed
+- Test full flow end-to-end with real players: create → character → lobby → launch → rounds
 
 ## Key Design Decisions (Summary)
 See individual docs files for full detail on each system.
@@ -48,8 +49,10 @@ See individual docs files for full detail on each system.
 - **RAG-grounded LLM** — Azure AI Search indexes SRD content
 - **Hybrid action system** — character sheet actions + freeform text
 - **Queue-based round lifecycle** — Azure Storage Queues replace Durable Functions (simpler, no orchestrator overhead)
-- **Azure SignalR** — real-time narrative broadcast to all players
+- **Lobby before launch** — campaigns start in `lobby` status; admin explicitly launches which fires the opening narrative
+- **Azure SignalR** — real-time broadcast for both game narrative and lobby chat/presence events
 - **gpt-image-1** — scene image generation each round (separate East US 2 OpenAI resource)
+- **Campaign status state machine** — `lobby` → `active` → (`completed` | `paused` | `deleted`)
 
 ## Developer Notes
 - Owner/initial player group: "The Lord's Wrath" (3-9 players, max 8-9)

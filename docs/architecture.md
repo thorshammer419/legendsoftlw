@@ -17,12 +17,42 @@
 | LLM (images) | Azure OpenAI — gpt-image-1 (East US 2, separate resource) |
 | Hosting | Azure Static Web Apps (legendsoftlw.app) |
 
+## Campaign Status State Machine
+
+```
+lobby → active → completed
+                → paused     (all players inactive)
+                → deleted    (soft-deleted by admin)
+```
+
+- Campaigns are created with `status: "lobby"`
+- Admin clicks "Launch Campaign" in the lobby → sets `status: "active"`, enqueues `campaign-intro`
+- `status: "lobby"` campaigns are excluded from the round-timeout timer check
+
+## Lobby Flow
+
+```
+1. Admin creates campaign → goes to character creation → lands in Lobby
+2. Other players join via invite link → auto-joined → create character → land in Lobby
+3. Lobby shows:
+   - Party roster with checkmark per player who has created their character
+   - Real-time chat (SignalR "lobbyEvent" events, type: "chat")
+   - A "player_ready" event fires on character save and appears as a system message
+4. Admin clicks "Launch Campaign" →
+   POST /campaigns/:id/lobby/launch →
+   campaign.status = "active" →
+   enqueue "campaign-intro" →
+   broadcast SignalR "lobbyEvent" {type: "launched"} →
+   all players on lobby page navigate to /game/:id
+```
+
+SignalR event types used by the lobby: `chat`, `player_ready`, `launched`
+
 ## Round Pipeline (Implemented)
 
 ```
-0. Campaign start:
-   First character save → "campaign-intro" queue message
-   → GPT-4.1 opening narrative + gpt-image-1 scene image
+0. Campaign opening (fires once, triggered by admin launching from lobby):
+   "campaign-intro" queue → GPT-4.1 opening narrative + gpt-image-1 scene image
    → Broadcast to all players via SignalR
         ↓
 1. Players submit actions via web UI
@@ -72,13 +102,34 @@
 13. Inactivity tracking, deadline reset, pending_actions cleared
 ```
 
-## New Player / Returning Player Flow
+## New Player / Returning Player Flow (joining mid-campaign)
 ```
 GET /campaigns/{id} → auto-join if not a member → "player-join" queue
   → GPT-4.1-mini: catch-up summary ("Previously on your adventure...")
   → GPT-4.1: cinematic introduction of new character to existing party
   → SignalR broadcast to all players
 ```
+
+## HTTP API Surface
+
+| Method | Route | Auth | Purpose |
+|--------|-------|------|---------|
+| POST | /me | user | Register/fetch player profile |
+| PUT | /me/push-subscription | user | Save push notification subscription |
+| POST | /campaigns | user | Create campaign (status: lobby) |
+| GET | /campaigns/:id | user | Get campaign (auto-joins new players) |
+| DELETE | /campaigns/:id | admin | Soft-delete campaign |
+| GET | /campaigns/:id/state | user | Get story state, character, action list, party status |
+| GET | /campaigns/:id/character | user | Get own character |
+| PUT | /campaigns/:id/character | user | Save character (broadcasts player_ready to lobby) |
+| POST | /campaigns/:id/submit-action | user | Submit round action |
+| POST | /campaigns/:id/validate-action | user | Pre-validate freeform action text |
+| GET/POST | /campaigns/:id/negotiate | user | SignalR connection negotiation |
+| POST | /campaigns/:id/lobby/message | user | Send lobby chat message |
+| POST | /campaigns/:id/lobby/launch | admin | Launch campaign (lobby → active) |
+| POST | /campaigns/:id/admin/start-round | admin | Force-resolve current round |
+| POST | /campaigns/:id/admin/toggle-player | admin | Activate/deactivate a player |
+| POST | /campaigns/:id/admin/export-novel | admin | Queue novel PDF export |
 
 ## Error Handling
 - Queue poison-message queues catch repeated failures (Azure default: 5 retries)

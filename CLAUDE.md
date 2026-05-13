@@ -32,9 +32,11 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Login page with logo + stone-gray title styling
 - [x] Delete campaign (soft delete, two-step confirmation in Admin page)
 - [x] Create campaign form includes Party Name field; errors displayed at top of page
+- [x] Bug fixes: delete campaign (missing import), create campaign error handling, SignalR broadcast delivery
+- [x] Tested end-to-end: create → character → lobby → launch navigates to game ✓
 
 ## Immediate Next Steps
-- Test full flow end-to-end with real players: create → character → lobby → launch → rounds
+- Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR
 
 ## Key Design Decisions (Summary)
 See individual docs files for full detail on each system.

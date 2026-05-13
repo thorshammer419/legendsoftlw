@@ -48,6 +48,22 @@ lobby → active → completed
 
 SignalR event types used by the lobby: `chat`, `player_ready`, `launched`
 
+## SignalR Broadcast Pattern
+
+**Important:** Azure SignalR Service does NOT support auto-joining groups via JWT claims
+(the `webpubsub.*` role syntax is Web PubSub only — it's silently ignored here).
+
+All broadcasts use **per-user targeting** via the REST API:
+```
+POST /api/v1/hubs/{hub}/users/{url-encoded-email}
+```
+Each caller looks up `get_campaign_players(campaign_id)` and passes `player_emails` to
+`broadcast_narrative` / `broadcast_lobby_event`. The broadcast function iterates over
+each email and sends individually. This means delivery is guaranteed to any connected
+client regardless of group membership.
+
+JWT tokens returned from the `/negotiate` endpoint only need `nameid` (email) and `aud`.
+
 ## Round Pipeline (Implemented)
 
 ```

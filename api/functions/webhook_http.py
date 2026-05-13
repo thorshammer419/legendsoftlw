@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import azure.functions as func
 
 from functions.activities.cosmos import (
-    get_campaign, get_story_state, get_campaign_player, get_campaign_players,
+    get_campaign, update_campaign, get_story_state, get_campaign_player, get_campaign_players,
     get_character, get_characters, upsert_character, upsert_campaign_player,
     upsert_player, get_player, create_campaign, upsert_story_state,
     get_action_list, get_narrative_log,
@@ -216,7 +216,10 @@ async def create_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
         "inactivity_thresholds": {"combat_encounters": 2, "scenes": 4},
         "legend": {"previous_campaign_id": None, "summary": None, "key_events": []},
     }
-    create_campaign(campaign_doc)
+    try:
+        create_campaign(campaign_doc)
+    except Exception as e:
+        return _error(f"Failed to create campaign: {e}", 500)
 
     state_doc = {
         "id": f"state_{campaign_id}",

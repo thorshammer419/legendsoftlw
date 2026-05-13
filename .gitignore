@@ -5,12 +5,36 @@ api/local.settings.json
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
+venv/
+.pytest_cache/
+*.egg-info/
 
 # Node
 node_modules/
 web/build/
+web/.env.local
+web/.env.development.local
+web/.env.test.local
+web/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Data (large files)
+# SRD data (large files — download locally via scripts/index_srd.py)
 data/srd_json/*.json
 data/srd_markdown/*.md
+
+# Azure Functions
+.python_packages/
+.funcignore
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

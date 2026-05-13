@@ -144,6 +144,9 @@ az storage container create \
   --name novel-exports \
   --account-name legendsoftlwstorage \
   --public-access off
+
+# scene-images is created automatically by the function on first use (public blob access)
+# az storage container create --name scene-images --account-name legendsoftlwstorage --public-access blob
 ```
 
 ## Step 7: Azure Functions
@@ -193,12 +196,40 @@ Store these secrets:
 
 ## Step 10: Azure OpenAI ✅ DONE
 
-Provisioned manually via Azure portal in Central US region.
+Two resources are required — text models and image generation are in different regions.
 
-- **Resource:** oai-thorshammer419-centralus
+### Text models (Central US) ✅
+- **Resource:** oai-thorshammer419-centralus (pre-existing, shared resource group)
 - **Endpoint:** https://oai-thorshammer419-centralus.openai.azure.com/
-- **GPT-4.1 deployment:** tlw-gpt-4.1
-- **GPT-4.1-mini deployment:** tlw-gpt-4.1-mini
+- **Deployments:** tlw-gpt-4.1 (GlobalStandard), tlw-gpt-4.1-mini (GlobalStandard), tlw-text-embedding-ada-002 (Standard)
+
+### Image generation (East US 2) ✅
+gpt-image-1 (DALL-E 3's replacement) is only available in East US 2 and Sweden Central.
+DALL-E 3 was deprecated March 2026 and can no longer be deployed.
+
+```bash
+az cognitiveservices account create \
+  --name tlw-openai-images \
+  --resource-group legends-of-tlw-rg \
+  --kind OpenAI \
+  --sku S0 \
+  --location eastus2 \
+  --custom-domain tlw-openai-images
+
+az cognitiveservices account deployment create \
+  --name tlw-openai-images \
+  --resource-group legends-of-tlw-rg \
+  --deployment-name tlw-gpt-image-1 \
+  --model-name gpt-image-1 \
+  --model-version "2025-04-15" \
+  --model-format OpenAI \
+  --sku-capacity 1 \
+  --sku-name GlobalStandard
+```
+
+- **Endpoint:** https://tlw-openai-images.openai.azure.com/
+- **Deployment:** tlw-gpt-image-1
+- **API version required:** 2025-04-01-preview (not 2024-02-01)
 
 ## Step 11: Azure Static Web Apps
 
@@ -234,9 +265,12 @@ After creation:
     "SEARCH_INDEX_NAME": "srd-index",
     "SIGNALR_CONNECTION_STRING": "YOUR_SIGNALR_CONNECTION_STRING",
     "OPENAI_ENDPOINT": "https://oai-thorshammer419-centralus.openai.azure.com/",
-    "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY",
+    "OPENAI_API_KEY": "YOUR_CENTRAL_US_OPENAI_KEY",
     "OPENAI_NARRATIVE_DEPLOYMENT": "tlw-gpt-4.1",
     "OPENAI_MINI_DEPLOYMENT": "tlw-gpt-4.1-mini",
+    "OPENAI_IMAGE_ENDPOINT": "https://tlw-openai-images.openai.azure.com/",
+    "OPENAI_IMAGE_API_KEY": "YOUR_EAST_US2_OPENAI_KEY",
+    "OPENAI_IMAGE_DEPLOYMENT": "tlw-gpt-image-1",
     "STORAGE_CONNECTION_STRING": "YOUR_STORAGE_CONNECTION_STRING",
     "COMMS_CONNECTION_STRING": "YOUR_COMMS_CONNECTION_STRING",
     "COMMS_SENDER_EMAIL": "noreply@legendsoftlw.app"

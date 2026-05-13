@@ -21,18 +21,19 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Folder structure created in repo
 - [x] Azure infrastructure provisioned
 - [x] Azure OpenAI access requested (already had access — deployed directly)
-- [ ] SRD data downloaded and indexed
-- [ ] Any application code written
+- [x] SRD data downloaded and indexed (1924 docs in srd-index)
+- [x] Full React frontend built and deployed (legendsoftlw.app)
+- [x] Full Azure Functions backend built and deployed
+- [x] Microsoft login working (Azure SWA V1 auth mode)
+- [x] Round lifecycle working end-to-end (queue-based, not Durable Functions)
+- [x] Campaign intro narrative on first character save
+- [x] Scene image generation per round (gpt-image-1, East US 2)
+- [x] Login page with logo + stone-gray title styling
 
 ## Immediate Next Steps
-1. Create folder structure in repo (see docs/project-structure.md)
-2. Set up GitHub Codespaces as primary dev environment
-3. Register domain legendsoftlw.app DNS with Cloudflare
-4. Provision Azure infrastructure (see docs/azure-infrastructure.md)
-5. Submit Azure OpenAI access request (GPT-4.1 + GPT-4.1-mini)
-6. Download and index SRD content (see docs/srd-pipeline.md)
-7. Build React frontend (see docs/frontend.md)
-8. Build Azure Functions backend (see docs/backend.md)
+- Test full round flow end-to-end with real players
+- Verify campaign intro fires correctly on first character save
+- Verify scene images appear in the narrative feed
 
 ## Key Design Decisions (Summary)
 See individual docs files for full detail on each system.
@@ -46,8 +47,9 @@ See individual docs files for full detail on each system.
 - **Client-side dice rolling** — cryptographic randomness via crypto.getRandomValues()
 - **RAG-grounded LLM** — Azure AI Search indexes SRD content
 - **Hybrid action system** — character sheet actions + freeform text
-- **Azure Durable Functions** — orchestrates round lifecycle
+- **Queue-based round lifecycle** — Azure Storage Queues replace Durable Functions (simpler, no orchestrator overhead)
 - **Azure SignalR** — real-time narrative broadcast to all players
+- **gpt-image-1** — scene image generation each round (separate East US 2 OpenAI resource)
 
 ## Developer Notes
 - Owner/initial player group: "The Lord's Wrath" (3-9 players, max 8-9)
@@ -55,6 +57,8 @@ See individual docs files for full detail on each system.
 - No player is ever permanently removed from a campaign
 - All infrastructure on Azure
 - Python for all backend/function code
-- GPT-4.1 for narrative generation
-- GPT-4.1-mini for all other LLM calls (RAG queries, state extraction,
-  action validation, action lists, summaries, introductions)
+- GPT-4.1 for narrative generation (`tlw-gpt-4.1`, Central US resource `oai-thorshammer419-centralus`)
+- GPT-4.1-mini for all other LLM calls — RAG queries, state extraction, action validation, action lists, summaries, introductions, DALL-E prompt distillation (`tlw-gpt-4.1-mini`)
+- gpt-image-1 for scene images (`tlw-gpt-image-1`, East US 2 resource `tlw-openai-images`)
+- text-embedding-ada-002 for SRD indexing (`tlw-text-embedding-ada-002`)
+- DALL-E 3 was deprecated March 2026; gpt-image-1 is the replacement (only available East US 2 / Sweden Central)

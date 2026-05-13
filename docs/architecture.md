@@ -8,17 +8,23 @@
 | Auth | Azure Static Web Apps social login (Google, Facebook, Microsoft) |
 | Real-time | Azure SignalR Service |
 | Backend | Azure Functions (Python) |
-| Orchestration | Azure Durable Functions |
+| Orchestration | Azure Storage Queues (resolve-round, player-join, novel-export, campaign-intro) |
 | Database | Azure Cosmos DB |
 | Search/RAG | Azure AI Search |
 | Email | Azure Communication Services |
-| File Storage | Azure Blob Storage (novel exports) |
-| LLM | Azure OpenAI (GPT-4.1 + GPT-4.1-mini) |
+| File Storage | Azure Blob Storage (novel exports + scene images) |
+| LLM (text) | Azure OpenAI — GPT-4.1 + GPT-4.1-mini (Central US) |
+| LLM (images) | Azure OpenAI — gpt-image-1 (East US 2, separate resource) |
 | Hosting | Azure Static Web Apps (legendsoftlw.app) |
 
-## Round Pipeline (Complete)
+## Round Pipeline (Implemented)
 
 ```
+0. Campaign start:
+   First character save → "campaign-intro" queue message
+   → GPT-4.1 opening narrative + gpt-image-1 scene image
+   → Broadcast to all players via SignalR
+        ↓
 1. Players submit actions via web UI
    (character sheet action OR freeform text)
         ↓
@@ -26,64 +32,58 @@
    privately in action panel before submission
    Character sheet actions: no validation needed
         ↓
-3. Azure Durable Function collects actions
-   - wait_for_external_event per player
-   - Race against configurable timeout timer
-   - Timeout respects schedule settings
-     (quiet hours, active days, blackout dates)
-   - Absent players get graceful narrative skip
+3. submit_action HTTP handler:
+   - Stores action in story_state.pending_actions
+   - If all active players submitted → enqueues "resolve-round"
+   Timer (every 15 min): checks round_deadline → enqueues "resolve-round"
         ↓
-4. GPT-4.1-mini: RAG query generation
+4. resolve-round queue trigger (round_resolver.py):
+        ↓
+5. GPT-4.1-mini: RAG query generation
    - Analyzes submitted player actions
    - Outputs JSON list of max 5 SRD queries
-   - Each query has: query text, category, tags
         ↓
-5. Azure AI Search: SRD retrieval
+6. Azure AI Search: SRD retrieval
    - Vector search with category filter
    - Returns relevant SRD chunks
         ↓
-6. GPT-4.1: Narrative generation
+7. GPT-4.1: Narrative generation
    - System prompt (DM persona + rules)
-   - Story state document
-   - Abbreviated character sheets (active players)
-   - Last 3 interactions for relevant major NPCs
-   - Rolling narrative summary (last 3 rounds)
-   - Player actions this round + dice results
+   - Story state, character sheets, NPC context
+   - Rolling narrative summary + player actions
    - Retrieved SRD chunks
-   - Outputs: immersive DM narrative
         ↓
-7. GPT-4.1-mini: State extraction
-   - Outputs JSON state update including:
-     scene_type, HP changes, conditions,
-     quest milestones, NPC updates,
-     interaction log entries, spell slots used
+8. GPT-4.1-mini: State extraction
+   - Outputs JSON: scene_type, HP changes, conditions,
+     quest milestones, NPC updates, spell slots used
         ↓
-8. GPT-4.1-mini: Contextual action list generation
-   - Per player, based on character sheet + scene
-   - Max 5 situational suggestions per player
-   - Pre-generated and cached in Cosmos DB
+9. GPT-4.1-mini: Contextual action list generation (per active player)
         ↓
-9. Azure Functions:
-   - Write updated story state to Cosmos DB
-   - Write updated NPC documents to Cosmos DB
-   - Update player action economy + spell slots
-   - Check inactivity thresholds
-   - Broadcast narrative via Azure SignalR
+10. gpt-image-1: Scene image generation
+    - GPT-4.1-mini first distills a DALL-E prompt from narrative + scene
+    - gpt-image-1 generates 1792×1024 image
+    - Stored permanently in Blob Storage "scene-images" container
+    - URL saved in story_state.scene_image_url
         ↓
-10. Web app:
-    - Narrative appears in all players' feeds
-    - Party status panel resets for new round
-    - Action panels repopulate with new
-      contextual action suggestions
-    - Players submit next round actions
+11. SignalR broadcast: narrative + scene_image_url → all players
+        ↓
+12. Email + push notifications to players
+        ↓
+13. Inactivity tracking, deadline reset, pending_actions cleared
+```
+
+## New Player / Returning Player Flow
+```
+GET /campaigns/{id} → auto-join if not a member → "player-join" queue
+  → GPT-4.1-mini: catch-up summary ("Previously on your adventure...")
+  → GPT-4.1: cinematic introduction of new character to existing party
+  → SignalR broadcast to all players
 ```
 
 ## Error Handling
-- Azure Durable Functions checkpointing after each activity
-- 3 retries with exponential backoff on any activity failure
-- Admin notified via email if all retries exhausted
-- Campaign pauses gracefully on unrecoverable failure
-- Monthly Azure spend cap — admin notified at 80%, pauses at 100%
+- Queue poison-message queues catch repeated failures (Azure default: 5 retries)
+- Scene image failure is non-blocking — round proceeds without image
+- Campaign pauses gracefully if all players go inactive
 
 ## LLM Call Summary Per Round
 
@@ -96,4 +96,7 @@
 | Action list generation | GPT-4.1-mini | Generate contextual action suggestions per player |
 | NPC introduction (on join) | GPT-4.1 | Cinematic introduction for new/returning players |
 | Catch-up summary (on join) | GPT-4.1-mini | "Previously in your adventure..." for new player |
+| Campaign intro | GPT-4.1 | Opening DM narrative when campaign begins |
+| Image prompt distillation | GPT-4.1-mini | Condenses scene + narrative into focused DALL-E prompt |
+| Scene image | gpt-image-1 | 1792×1024 dark fantasy illustration, each round |
 | Novel export | GPT-4.1 | Rewrite full campaign as polished fantasy novel |

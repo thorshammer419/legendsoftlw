@@ -1,0 +1,170 @@
+"""
+Azure Functions entry point — queue-based architecture (no Durable Functions).
+
+Round lifecycle:
+  submit-action HTTP  → stores action in Cosmos pending_actions
+                      → if all players submitted: enqueues "resolve-round"
+  check-timeouts      → timer every 15 min, enqueues "resolve-round" for expired deadlines
+  resolve-round queue → full narrative pipeline (round_resolver.py)
+  player-join queue   → catch-up + introduction flow
+  novel-export queue  → PDF generation + email
+"""
+
+import azure.functions as func
+
+from functions import webhook_http as wh
+from functions.round_resolver import (
+    resolve_round_from_queue,
+    player_join_from_queue,
+    novel_export_from_queue,
+    campaign_intro_from_queue,
+)
+
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+
+# ===========================================================================
+# HTTP triggers
+# ===========================================================================
+
+@app.route(route="me", methods=["POST", "GET"])
+async def register_player(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.register_player(req)
+
+
+@app.route(route="me/push-subscription", methods=["PUT"])
+async def update_push_subscription(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.update_push_subscription(req)
+
+
+@app.route(route="campaigns", methods=["POST"])
+async def create_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.create_campaign_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}", methods=["GET"])
+async def get_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.get_campaign_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/state", methods=["GET"])
+async def get_game_state(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.get_game_state_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/character", methods=["GET"])
+async def get_character_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.get_character_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/character", methods=["PUT"])
+async def upsert_character_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.upsert_character_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/submit-action", methods=["POST"])
+async def submit_action(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.submit_action(req)
+
+
+@app.route(route="campaigns/{campaign_id}/validate-action", methods=["POST"])
+async def validate_action(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.validate_action(req)
+
+
+@app.route(route="campaigns/{campaign_id}/negotiate", methods=["GET", "POST"])
+async def negotiate(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.negotiate(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/start-round", methods=["POST"])
+async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_start_round(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/toggle-player", methods=["POST"])
+async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_toggle_player(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/export-novel", methods=["POST"])
+async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_export_novel(req)
+
+
+# ===========================================================================
+# Timer trigger — checks for expired round deadlines every 15 minutes
+# ===========================================================================
+
+@app.timer_trigger(schedule="0 */15 * * * *", arg_name="timer", run_on_startup=False)
+def check_round_timeouts(timer: func.TimerRequest) -> None:
+    import logging
+    import json
+    import base64
+    import os
+    from datetime import datetime, timezone
+    from functions.activities.cosmos import get_all_active_campaigns, get_story_state
+
+    logger = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+
+    def enqueue(campaign_id: str):
+        from azure.storage.queue import QueueClient
+        conn_str = os.environ["AzureWebJobsStorage"]
+        q = QueueClient.from_connection_string(conn_str, "resolve-round")
+        try:
+            q.create_queue()
+        except Exception:
+            pass
+        msg = base64.b64encode(json.dumps({"campaign_id": campaign_id, "reason": "timeout"}).encode()).decode()
+        q.send_message(msg)
+
+    try:
+        campaigns = get_all_active_campaigns()
+    except Exception as e:
+        logger.error("Failed to get active campaigns: %s", e)
+        return
+
+    for campaign in campaigns:
+        cid = campaign.get("campaign_id")
+        try:
+            state = get_story_state(cid)
+            if state.get("round_status") == "resolving":
+                continue
+            deadline_str = state.get("round_deadline")
+            if not deadline_str:
+                continue
+            deadline = datetime.fromisoformat(deadline_str.replace("Z", "+00:00"))
+            if now >= deadline:
+                logger.info("Timeout expired for campaign %s, triggering resolution", cid)
+                enqueue(cid)
+        except Exception as e:
+            logger.error("Timeout check failed for campaign %s: %s", cid, e)
+
+
+# ===========================================================================
+# Queue triggers — background processing
+# ===========================================================================
+
+@app.queue_trigger(arg_name="msg", queue_name="resolve-round",
+                   connection="AzureWebJobsStorage")
+def process_round_queue(msg: func.QueueMessage) -> None:
+    resolve_round_from_queue(msg)
+
+
+@app.queue_trigger(arg_name="msg", queue_name="player-join",
+                   connection="AzureWebJobsStorage")
+def process_join_queue(msg: func.QueueMessage) -> None:
+    player_join_from_queue(msg)
+
+
+@app.queue_trigger(arg_name="msg", queue_name="novel-export",
+                   connection="AzureWebJobsStorage")
+def process_novel_queue(msg: func.QueueMessage) -> None:
+    novel_export_from_queue(msg)
+
+
+@app.queue_trigger(arg_name="msg", queue_name="campaign-intro",
+                   connection="AzureWebJobsStorage")
+def process_intro_queue(msg: func.QueueMessage) -> None:
+    campaign_intro_from_queue(msg)

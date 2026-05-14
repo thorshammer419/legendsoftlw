@@ -25,12 +25,29 @@ jobs:
         run: npm run build
         working-directory: web
 
-      - name: Install SWA CLI 1.x
-        run: npm install -g @azure/static-web-apps-cli@1.1.9
-
       - name: Deploy to Azure Static Web Apps
         run: |
+          # Fetch binary URL from Azure's release metadata
+          METADATA=$(curl -sL "https://aka.ms/swalocaldeploy")
+          BINARY_URL=$(echo "$METADATA" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          latest = next(d for d in data if d['version'] == 'latest')
+          print(latest['files']['linux-x64']['url'])
+          ")
+
+          echo "Downloading StaticSitesClient from $BINARY_URL"
+          curl -sL "$BINARY_URL" -o StaticSitesClient
+          chmod +x StaticSitesClient
+
           TOKEN=$(echo "$AZURE_STATIC_WEB_APPS_API_TOKEN" | tr -d '[:space:]')
-          swa deploy web/build --deployment-token "$TOKEN" --env production
+
+          DEPLOYMENT_TOKEN="$TOKEN" \
+          DEPLOYMENT_ACTION="upload" \
+          DEPLOYMENT_PROVIDER="SwaCli" \
+          DEPLOYMENT_ENVIRONMENT="production" \
+          SKIP_APP_BUILD="true" \
+          REPOSITORY_BASE="$GITHUB_WORKSPACE/web/build" \
+          ./StaticSitesClient
         env:
           AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}

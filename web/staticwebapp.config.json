@@ -32,6 +32,10 @@
   },
   "routes": [
     {
+      "route": "/api/logout",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/api/*",
       "allowedRoles": ["authenticated"]
     }

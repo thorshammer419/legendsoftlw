@@ -27,6 +27,24 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 # HTTP triggers
 # ===========================================================================
 
+@app.route(route="logout", methods=["GET"])
+async def logout_route(req: func.HttpRequest) -> func.HttpResponse:
+    # Clear the SWA session cookie directly so the browser lands on the login
+    # page without being redirected through the identity provider's sign-out page.
+    return func.HttpResponse(
+        status_code=302,
+        headers={
+            "Location": "/",
+            "Set-Cookie": (
+                "StaticWebAppsAuthContextCookie=; "
+                "path=/; domain=legendsoftlw.app; "
+                "expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; "
+                "Secure; HttpOnly; SameSite=None"
+            ),
+        },
+    )
+
+
 @app.route(route="me", methods=["POST", "GET"])
 async def register_player(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.register_player(req)

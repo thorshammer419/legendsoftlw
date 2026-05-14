@@ -138,7 +138,7 @@ GET /campaigns/{id} → auto-join if not a member → "player-join" queue
 
 The app uses a two-layer auth model:
 
-1. **SWA authentication** — `staticwebapp.config.json` requires `authenticated` on `/*`. Unauthenticated visitors are redirected to the AAD login page.
+1. **SWA authentication** — `staticwebapp.config.json` requires `authenticated` on `/api/*`. Direct API calls without a session are blocked at the SWA edge. The app routes (`/*`) are intentionally left open so unauthenticated visitors land on the branded Login.jsx page and can choose their login provider.
 2. **Allowlist** — every authenticated user must also be on the allowlist in Cosmos DB before they can use the app. `POST /me` checks the allowlist and returns 403 if absent. All other endpoints use `_require_auth_approved`, which additionally checks `player.approved` (defaults to `True` when missing — backward compatible with pre-allowlist players).
 
 **Allowlist documents** are stored in the `game` container with `campaign_id = "allowed_users"` (a reserved partition key, like `"players"` for global player docs).

@@ -1,16 +1,10 @@
 {
   "routes": [
     {
-      "route": "/*",
+      "route": "/api/*",
       "allowedRoles": ["authenticated"]
     }
   ],
-  "responseOverrides": {
-    "401": {
-      "redirect": "/.auth/login/aad",
-      "statusCode": 302
-    }
-  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/api/*", "*.{css,js,png,ico,svg}"]

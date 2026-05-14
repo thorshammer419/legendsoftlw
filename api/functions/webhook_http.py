@@ -486,7 +486,7 @@ async def register_player(req: func.HttpRequest) -> func.HttpResponse:
         player["approved"] = True
         upsert_player(player)
 
-    return _json_response(player)
+    return _json_response({**player, "is_system_admin": _is_system_admin(email)})
 
 
 # ---------------------------------------------------------------------------

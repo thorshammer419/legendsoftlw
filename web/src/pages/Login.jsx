@@ -8,20 +8,23 @@ const providers = [
 export default function Login() {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100%', padding: 24,
+      position: 'fixed', inset: 0,
+      overflowY: 'auto',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: 24,
       backgroundImage: 'url(/tlw_login_background.png)',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     }}>
-      {/* Dark overlay */}
+      {/* Dark overlay — fixed so it covers the viewport during scroll */}
       <div style={{
-        position: 'absolute', inset: 0,
+        position: 'fixed', inset: 0,
         background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.6) 100%)',
+        pointerEvents: 'none',
       }} />
 
-      <div style={{ position: 'relative', maxWidth: 380, width: '100%', textAlign: 'center' }}>
+      <div style={{ position: 'relative', maxWidth: 380, width: '100%', textAlign: 'center', margin: 'auto' }}>
 
         {/* Logo */}
         <div style={{
@@ -62,13 +65,13 @@ export default function Login() {
           The Legends of TLW
         </h1>
         <p style={{
-          color: '#d0d0d0', marginBottom: 40, fontStyle: 'italic', fontSize: 13,
+          color: '#d0d0d0', marginBottom: 56, fontStyle: 'italic', fontSize: 13,
           textShadow: '0 1px 6px rgba(0,0,0,0.9)',
         }}>
           The untold stories of The Lord's Wrath, and other adventurers of the forgotten realms
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 150 }}>
           {providers.map(({ label, provider, image }) => (
             <button
               key={provider}
@@ -82,7 +85,8 @@ export default function Login() {
                 borderRadius: 16,
                 overflow: 'hidden',
                 display: 'block',
-                width: '100%',
+                width: '70%',
+                margin: '0 auto',
                 boxShadow: [
                   '0 0 0 2px rgba(0,0,0,0.97)',
                   '0 0 18px rgba(0,0,0,0.97)',

@@ -5,11 +5,14 @@ Players join a group named after their campaign_id when they connect.
 """
 
 import json
+import logging
 import os
 import time
 import urllib.parse
 import urllib.request
 import jwt
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_connection_string(conn_str: str) -> tuple[str, str]:
@@ -34,16 +37,21 @@ def _post(url: str, token: str, body: dict) -> int:
         return resp.status
 
 
-def _send_to_users(endpoint: str, key: str, hub: str, user_ids: list, payload: dict) -> None:
-    """Send a SignalR message to each user individually by their userId (email)."""
+def _send_to_users(endpoint: str, key: str, hub: str, user_ids: list, payload: dict) -> dict:
+    """Send a SignalR message to each user individually by their userId (email).
+    Returns {"sent": [...], "failed": [...]} so callers can log or retry."""
+    sent, failed = [], []
     for user_id in user_ids:
         try:
             encoded = urllib.parse.quote(user_id, safe="")
             url = f"{endpoint}/api/v1/hubs/{hub}/users/{encoded}"
             token = _make_token(key, url)
             _post(url, token, payload)
-        except Exception:
-            pass
+            sent.append(user_id)
+        except Exception as e:
+            logger.warning("SignalR delivery failed for %s: %s", user_id, e)
+            failed.append(user_id)
+    return {"sent": sent, "failed": failed}
 
 
 def broadcast_narrative(input_data: dict) -> None:
@@ -64,7 +72,16 @@ def broadcast_narrative(input_data: dict) -> None:
             "scene_image_url": input_data.get("scene_image_url"),
         }],
     }
-    _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
+    result = _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
+    if result["failed"]:
+        logger.warning(
+            "broadcast_narrative: %d of %d deliveries failed — round %s, failed: %s",
+            len(result["failed"]),
+            len(result["sent"]) + len(result["failed"]),
+            input_data.get("round_number"),
+            result["failed"],
+        )
+    return result
 
 
 def broadcast_lobby_event(input_data: dict) -> None:
@@ -81,7 +98,16 @@ def broadcast_lobby_event(input_data: dict) -> None:
         "target": "lobbyEvent",
         "arguments": [input_data],
     }
-    _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
+    result = _send_to_users(endpoint, key, hub, input_data.get("player_emails", []), payload)
+    if result["failed"]:
+        logger.warning(
+            "broadcast_lobby_event(%s): %d of %d deliveries failed — failed: %s",
+            input_data.get("type"),
+            len(result["failed"]),
+            len(result["sent"]) + len(result["failed"]),
+            result["failed"],
+        )
+    return result
 
 
 def get_signalr_connection_info(input_data: dict) -> dict:

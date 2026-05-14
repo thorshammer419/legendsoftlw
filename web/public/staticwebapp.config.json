@@ -1,0 +1,39 @@
+{
+  "auth": {
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/common/v2.0",
+          "clientIdSettingName": "AAD_CLIENT_ID",
+          "clientSecretSettingName": "AAD_CLIENT_SECRET"
+        }
+      },
+      "customOpenIdConnectProviders": {
+        "google": {
+          "registration": {
+            "clientIdSettingName": "GOOGLE_CLIENT_ID",
+            "clientCredential": {
+              "clientSecretSettingName": "GOOGLE_CLIENT_SECRET"
+            },
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://accounts.google.com/.well-known/openid-configuration"
+            }
+          },
+          "login": {
+            "scopes": ["openid", "profile", "email"]
+          }
+        }
+      }
+    }
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*", "*.{css,js,png,ico,svg}"]
+  }
+}

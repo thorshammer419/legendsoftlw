@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { logout } from '../services/auth';
 
 export default function Dashboard({ user }) {
@@ -24,7 +25,12 @@ export default function Dashboard({ user }) {
           <h1 style={{ marginBottom: 2 }}>Welcome, {displayName}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Your campaigns</p>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {user?.is_system_admin && (
+            <Link to="/admin/access" className="btn btn-secondary btn-sm">Access Control</Link>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
+        </div>
       </div>
 
       {loading ? (

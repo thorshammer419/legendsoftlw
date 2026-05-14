@@ -2,7 +2,7 @@ import { login } from '../services/auth';
 
 const providers = [
   { label: 'Continue with Google',    provider: 'google',    image: '/tlw_login_google.png' },
-  { label: 'Continue with Microsoft', provider: 'microsoft', image: '/tlw_login_microsoft.png' },
+  { label: 'Continue with Microsoft', provider: 'aad',       image: '/tlw_login_microsoft.png' },
 ];
 
 export default function Login() {

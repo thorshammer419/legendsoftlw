@@ -60,9 +60,9 @@ export const api = {
   deleteCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}`, { method: 'DELETE' }),
 
-  getAllowedUsers: () => req('/admin/users/allowed'),
+  getAllowedUsers: () => req('/allowlist'),
   addAllowedUser: (email) =>
-    req('/admin/users/allowed', { method: 'POST', body: JSON.stringify({ email }) }),
+    req('/allowlist', { method: 'POST', body: JSON.stringify({ email }) }),
   removeAllowedUser: (email) =>
-    req('/admin/users/allowed', { method: 'DELETE', body: JSON.stringify({ email }) }),
+    req('/allowlist', { method: 'DELETE', body: JSON.stringify({ email }) }),
 };

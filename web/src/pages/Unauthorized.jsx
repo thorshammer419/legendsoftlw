@@ -1,3 +1,5 @@
+import { logout } from '../services/auth';
+
 export default function Unauthorized() {
   return (
     <div style={{
@@ -46,6 +48,22 @@ export default function Unauthorized() {
             markerickson@rocketmail.com
           </a>
         </p>
+
+        <button
+          onClick={logout}
+          style={{
+            marginTop: 24,
+            padding: '10px 24px',
+            background: 'transparent',
+            border: '1px solid rgba(160,160,160,0.5)',
+            borderRadius: 6,
+            color: '#a0a0a0',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Sign out
+        </button>
       </div>
     </div>
   );

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { Link } from 'react-router-dom';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -28,7 +27,7 @@ const DEFAULTS = {
   },
 };
 
-export default function CreateCampaign({ user }) {
+export default function CreateCampaign() {
   const navigate = useNavigate();
   const [form, setForm] = useState(DEFAULTS);
   const [saving, setSaving] = useState(false);
@@ -74,15 +73,6 @@ export default function CreateCampaign({ user }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
         <h1 style={{ margin: 0 }}>New Campaign</h1>
-        {user?.is_system_admin && (
-          <Link
-            to="/admin/access"
-            className="btn btn-secondary btn-sm"
-            style={{ marginLeft: 'auto' }}
-          >
-            Access Control
-          </Link>
-        )}
       </div>
 
       {error && (

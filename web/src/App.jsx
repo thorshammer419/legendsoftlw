@@ -9,7 +9,6 @@ import CampaignArchive from './pages/CampaignArchive';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
 import Admin from './pages/Admin';
-import AccessControl from './pages/AccessControl';
 
 export default function App() {
   const { user, loading, isAdmin, unauthorized } = useAuth();
@@ -29,13 +28,12 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Dashboard user={user} />} />
-        <Route path="/campaigns/new" element={<CreateCampaign user={user} />} />
+        <Route path="/campaigns/new" element={<CreateCampaign />} />
         <Route path="/campaigns/:campaignId/character" element={<CharacterCreate user={user} />} />
         <Route path="/campaigns/:campaignId/lobby" element={<Lobby user={user} isAdmin={isAdmin} />} />
         <Route path="/campaigns/:campaignId/archive" element={<CampaignArchive user={user} />} />
         <Route path="/campaigns/:campaignId/admin" element={<Admin user={user} isAdmin={isAdmin} />} />
         <Route path="/game/:campaignId" element={<Game user={user} isAdmin={isAdmin} />} />
-        <Route path="/admin/access" element={<AccessControl user={user} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -143,7 +143,9 @@ The app uses a two-layer auth model:
 
 **Allowlist documents** are stored in the `game` container with `campaign_id = "allowed_users"` (a reserved partition key, like `"players"` for global player docs).
 
-**System admins** (identified by the `SYSTEM_ADMIN_EMAILS` env var) can manage the allowlist via `GET/POST/DELETE /admin/users/allowed`. The Admin page shows an Access Control card to system admin users only. Removing a user sets `player.approved = False` immediately, blocking their next API call even if still authenticated.
+**System admins** (identified by the `SYSTEM_ADMIN_EMAILS` env var) can manage the allowlist via `GET/POST/DELETE /allowlist`. The Dashboard shows an Access Control panel to system admin users only. Removing a user sets `player.approved = False` immediately, blocking their next API call even if still authenticated.
+
+> **Note:** The route is `/allowlist` (not `/admin/users/allowed`) because Azure Functions reserves the `/admin/*` path for its own management API, which intercepts requests before they reach user-defined functions.
 
 **Frontend 403 handling** — `useAuth` detects `err.status === 403` from `registerPlayer` and sets `unauthorized = true`, which routes to the `Unauthorized` page with a contact email.
 
@@ -169,9 +171,9 @@ The app uses a two-layer auth model:
 | POST | /campaigns/:id/admin/start-round | campaign admin | Force-resolve current round |
 | POST | /campaigns/:id/admin/toggle-player | campaign admin | Activate/deactivate a player |
 | POST | /campaigns/:id/admin/export-novel | campaign admin | Queue novel PDF export |
-| GET | /admin/users/allowed | system admin | List all allowlisted emails |
-| POST | /admin/users/allowed | system admin | Add email to allowlist |
-| DELETE | /admin/users/allowed | system admin | Remove email; sets player.approved=False |
+| GET | /allowlist | system admin | List all allowlisted emails |
+| POST | /allowlist | system admin | Add email to allowlist |
+| DELETE | /allowlist | system admin | Remove email; sets player.approved=False |
 
 ## Domain Layer
 

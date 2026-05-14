@@ -107,17 +107,17 @@ async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.delete_campaign_handler(req)
 
 
-@app.route(route="admin/users/allowed", methods=["GET"])
+@app.route(route="allowlist", methods=["GET"])
 async def get_allowed_users(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.get_allowed_users_handler(req)
 
 
-@app.route(route="admin/users/allowed", methods=["POST"])
+@app.route(route="allowlist", methods=["POST"])
 async def add_allowed_user(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.add_allowed_user_handler(req)
 
 
-@app.route(route="admin/users/allowed", methods=["DELETE"])
+@app.route(route="allowlist", methods=["DELETE"])
 async def remove_allowed_user(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.remove_allowed_user_handler(req)
 

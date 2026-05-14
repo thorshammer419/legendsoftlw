@@ -23,7 +23,9 @@ export default function Dashboard({ user }) {
     setShowAccessControl(true);
     try {
       setAllowedUsers(await api.getAllowedUsers());
-    } catch { /* non-admin or error — panel still shows */ }
+    } catch (err) {
+      acNotify(`Error loading list: ${err.message || err.status || 'unknown'}`);
+    }
   };
 
   const acNotify = (msg) => {

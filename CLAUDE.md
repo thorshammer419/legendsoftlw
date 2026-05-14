@@ -79,3 +79,31 @@ See individual docs files for full detail on each system.
 - gpt-image-1 for scene images (`tlw-gpt-image-1`, East US 2 resource `tlw-openai-images`)
 - text-embedding-ada-002 for SRD indexing (`tlw-text-embedding-ada-002`)
 - DALL-E 3 was deprecated March 2026; gpt-image-1 is the replacement (only available East US 2 / Sweden Central)
+
+## Deployment Gotchas
+
+### staticwebapp.config.json — two copies, must stay in sync
+There are two copies of this file:
+- `web/public/staticwebapp.config.json` — **the deployed copy**; `npm run build` copies it into `web/build/` which CI uploads
+- `web/staticwebapp.config.json` — reference copy at the web root; not deployed but kept in sync manually
+
+Always edit BOTH. If only `web/public/` is updated the root copy drifts and causes confusion.
+
+### Azure Functions — deployed separately, NOT via CI
+The Azure Functions app (`legendsoftlw-functions`) is a **standalone resource**, not SWA-managed. The CI workflow (`deploy.yml`) only deploys the static frontend. Functions must be deployed manually:
+```
+cd api && func azure functionapp publish legendsoftlw-functions --python
+```
+Do NOT add `--api` to the StaticSitesClient CI command — it would conflict with the existing standalone Functions app and break API routing.
+
+### Microsoft sign-out interstitial — cannot be bypassed
+Sign-out calls `/.auth/logout` which for the built-in `azureActiveDirectory` provider always redirects through `login.microsoftonline.com` before returning. Three approaches were tried and failed:
+1. `fetch` with `redirect:manual` — opaque responses don't process `Set-Cookie` headers
+2. Azure Function setting `Set-Cookie: Max-Age=0` — SWA proxy strips `Set-Cookie` from function responses
+3. Custom OIDC for Microsoft — fails because `/common` issuer uses `{tenantid}` placeholder that doesn't match real tokens
+The interstitial is ~1 second and auto-redirects back via `/.auth/logout/complete` (registered in the AAD app). This is a platform limit.
+
+### Auth config provider routing
+- Google: `customOpenIdConnectProviders.google` in `staticwebapp.config.json`; login URL `/.auth/login/google`
+- Microsoft: built-in `azureActiveDirectory` in `staticwebapp.config.json`; login URL `/.auth/login/aad`
+- Both use `prompt=select_account` so the account picker appears after sign-out

@@ -4,17 +4,14 @@ All Durable Functions client references removed — round lifecycle uses queues.
 """
 
 import json
-import uuid
 import base64
-import os
 from datetime import datetime, timezone
 
 import azure.functions as func
 
 from functions.activities.cosmos import (
     get_campaign, update_campaign, get_story_state, get_campaign_player, get_campaign_players,
-    get_character, get_characters, upsert_character, upsert_campaign_player,
-    upsert_player, get_player, create_campaign, upsert_story_state,
+    get_character, upsert_campaign_player, upsert_player, get_player,
     get_action_list, get_narrative_log,
 )
 from functions.activities.action_validator import validate_freeform_action
@@ -23,6 +20,11 @@ from functions.activities.email import (
     send_player_reactivated_notification,
     send_player_inactive_notification,
 )
+from functions.domain import (
+    DomainError, submit_player_action, create_new_campaign, save_character,
+    join_campaign_as_observer,
+)
+from helpers.queue import enqueue
 
 
 def _json_response(data, status_code=200):
@@ -58,17 +60,6 @@ def _require_auth(req: func.HttpRequest):
     return email, None
 
 
-def _enqueue(queue_name: str, payload: dict):
-    from azure.storage.queue import QueueClient
-    conn_str = os.environ["AzureWebJobsStorage"]
-    q = QueueClient.from_connection_string(conn_str, queue_name)
-    try:
-        q.create_queue()
-    except Exception:
-        pass
-    q.send_message(base64.b64encode(json.dumps(payload).encode()).decode())
-
-
 # ---------------------------------------------------------------------------
 # SignalR negotiate
 # ---------------------------------------------------------------------------
@@ -102,36 +93,16 @@ async def submit_action(req: func.HttpRequest) -> func.HttpResponse:
 
     campaign_id = body.get("campaign_id")
     action_text = body.get("action_text")
-    rolls = body.get("rolls", [])
-
     if not campaign_id or not action_text:
         return _error("campaign_id and action_text required")
 
-    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
-    if not cp or cp.get("status") != "active":
-        return _error("You are not an active player in this campaign", 403)
+    try:
+        result = submit_player_action(campaign_id, email, action_text, body.get("rolls", []))
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
-    story_state = get_story_state(campaign_id)
-    if story_state.get("round_status") == "resolving":
-        return _error("Round is currently being resolved, please wait", 409)
-
-    # Store action in pending_actions
-    pending = story_state.get("pending_actions", {})
-    pending[email] = {
-        "action_text": action_text,
-        "rolls": rolls,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
-    }
-    story_state["pending_actions"] = pending
-    upsert_story_state(story_state)
-
-    # Check if all active players have now submitted
-    campaign_players = get_campaign_players(campaign_id)
-    active_emails = {p["email"] for p in campaign_players if p.get("status") == "active"}
-    submitted_emails = set(pending.keys())
-
-    if active_emails and active_emails.issubset(submitted_emails):
-        _enqueue("resolve-round", {"campaign_id": campaign_id, "reason": "all_submitted"})
+    if result["round_ready"]:
+        enqueue("resolve-round", {"campaign_id": campaign_id, "reason": "all_submitted"})
 
     return _json_response({"status": "submitted"})
 
@@ -187,79 +158,10 @@ async def create_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError:
         return _error("Invalid JSON")
 
-    campaign_id = str(uuid.uuid4())[:8]
-    now = datetime.now(timezone.utc).isoformat()
-
-    schedule = body.get("schedule", {
-        "timeout_enabled": True,
-        "round_timeout_minutes": 1440,
-        "quiet_hours_start": "22:00",
-        "quiet_hours_end": "08:00",
-        "timezone": "America/Chicago",
-        "active_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-        "blackout_dates": [],
-    })
-
-    campaign_doc = {
-        "id": f"campaign_{campaign_id}",
-        "type": "campaign",
-        "campaign_id": campaign_id,
-        "name": body.get("name", "New Campaign"),
-        "description": body.get("description", ""),
-        "party_name": body.get("party_name", "The Adventurers"),
-        "status": "lobby",
-        "created_by": email,
-        "created_at": now,
-        "admin_emails": [email],
-        "max_players": body.get("max_players", 8),
-        "schedule": schedule,
-        "inactivity_thresholds": {"combat_encounters": 2, "scenes": 4},
-        "legend": {"previous_campaign_id": None, "summary": None, "key_events": []},
-    }
     try:
-        create_campaign(campaign_doc)
+        campaign_doc = create_new_campaign(email, body)
     except Exception as e:
         return _error(f"Failed to create campaign: {e}", 500)
-
-    state_doc = {
-        "id": f"state_{campaign_id}",
-        "type": "story_state",
-        "campaign_id": campaign_id,
-        "round_number": 0,
-        "round_status": "waiting",
-        "round_started_at": now,
-        "round_deadline": None,
-        "scene_type": "exploration",
-        "current_scene": {
-            "location": "Unknown",
-            "description": "",
-            "active_npcs": [],
-            "threats": [],
-            "exits": [],
-        },
-        "quest": {"main_objective": "", "completed_milestones": [], "failed_milestones": []},
-        "narrative_summary": "",
-        "pending_actions": {},
-        "action_economy": {},
-    }
-    upsert_story_state(state_doc)
-
-    cp_doc = {
-        "id": f"campaign_player_{campaign_id}_{email}",
-        "type": "campaign_player",
-        "campaign_id": campaign_id,
-        "email": email,
-        "status": "active",
-        "role": "admin",
-        "consecutive_combat_skips": 0,
-        "consecutive_scene_skips": 0,
-        "manually_set_inactive": False,
-        "inactivated_at": None,
-        "joined_at": now,
-        "character_creation_complete": False,
-        "notifications": {"email": True, "push": False},
-    }
-    upsert_campaign_player(cp_doc)
 
     return _json_response(campaign_doc, 201)
 
@@ -277,25 +179,8 @@ async def get_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
     if not cp:
-        # Auto-join as observer if campaign exists
-        now = datetime.now(timezone.utc).isoformat()
-        cp = {
-            "id": f"campaign_player_{campaign_id}_{email}",
-            "type": "campaign_player",
-            "campaign_id": campaign_id,
-            "email": email,
-            "status": "active",
-            "role": "player",
-            "consecutive_combat_skips": 0,
-            "consecutive_scene_skips": 0,
-            "manually_set_inactive": False,
-            "inactivated_at": None,
-            "joined_at": now,
-            "character_creation_complete": False,
-            "notifications": {"email": True, "push": False},
-        }
-        upsert_campaign_player(cp)
-        _enqueue("player-join", {"campaign_id": campaign_id, "email": email})
+        join_campaign_as_observer(campaign_id, email)
+        enqueue("player-join", {"campaign_id": campaign_id, "email": email})
 
     return _json_response(campaign)
 
@@ -361,37 +246,22 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError:
         return _error("Invalid JSON")
 
-    body["id"] = f"character_{campaign_id}_{email}"
-    body["type"] = "character"
-    body["campaign_id"] = campaign_id
-    body["email"] = email
-    upsert_character(body)
+    result = save_character(campaign_id, email, body)
 
-    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
-    if cp:
-        was_complete = cp.get("character_creation_complete", False)
-        cp["character_creation_complete"] = True
-        upsert_campaign_player(cp)
-
-        # Notify the lobby that this player is ready
-        if not was_complete:
-            player = get_player(email)
-            display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
-            char_name = body.get("name", "")
-            char_class = body.get("class", "")
-            try:
-                all_players = get_campaign_players(campaign_id)
-                broadcast_lobby_event({
-                    "campaign_id": campaign_id,
-                    "type": "player_ready",
-                    "email": email,
-                    "display_name": display_name,
-                    "char_name": char_name,
-                    "char_class": char_class,
-                    "player_emails": [p["email"] for p in all_players],
-                })
-            except Exception:
-                pass
+    if result["first_completion"]:
+        all_players = get_campaign_players(campaign_id)
+        try:
+            broadcast_lobby_event({
+                "campaign_id": campaign_id,
+                "type": "player_ready",
+                "email": result["email"],
+                "display_name": result["display_name"],
+                "char_name": result["char_name"],
+                "char_class": result["char_class"],
+                "player_emails": [p["email"] for p in all_players],
+            })
+        except Exception:
+            pass
 
     return _json_response({"status": "saved"})
 
@@ -471,7 +341,7 @@ async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
     if story_state.get("round_status") == "resolving":
         return _error("Round is already being resolved", 409)
 
-    _enqueue("resolve-round", {"campaign_id": campaign_id, "reason": "admin_forced"})
+    enqueue("resolve-round", {"campaign_id": campaign_id, "reason": "admin_forced"})
     return _json_response({"status": "resolution_queued"})
 
 
@@ -486,7 +356,7 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
     if email not in campaign.get("admin_emails", []):
         return _error("Admin access required", 403)
 
-    _enqueue("novel-export", {"campaign_id": campaign_id})
+    enqueue("novel-export", {"campaign_id": campaign_id})
     return _json_response({"status": "export_queued"})
 
 
@@ -543,7 +413,7 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
     campaign["status"] = "active"
     update_campaign(campaign)
 
-    _enqueue("campaign-intro", {"campaign_id": campaign_id})
+    enqueue("campaign-intro", {"campaign_id": campaign_id})
 
     all_players = get_campaign_players(campaign_id)
     broadcast_lobby_event({

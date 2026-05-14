@@ -5,8 +5,6 @@ Replaces the Durable Functions orchestrator with direct sequential function call
 
 import json
 import logging
-import base64
-import os
 from datetime import datetime, timezone
 
 from helpers.inactivity import should_mark_inactive, increment_skip_counters, reset_skip_counters
@@ -32,19 +30,9 @@ from functions.activities.catchup_summary import generate_catchup_summary
 from functions.activities.novel_export import generate_novel
 from functions.activities.campaign_intro import generate_campaign_intro
 from functions.activities.scene_image import generate_scene_image
+from helpers.queue import enqueue as _enqueue
 
 logger = logging.getLogger(__name__)
-
-
-def _enqueue(queue_name: str, payload: dict):
-    from azure.storage.queue import QueueClient
-    conn_str = os.environ["AzureWebJobsStorage"]
-    q = QueueClient.from_connection_string(conn_str, queue_name)
-    try:
-        q.create_queue()
-    except Exception:
-        pass
-    q.send_message(base64.b64encode(json.dumps(payload).encode()).decode())
 
 
 # ---------------------------------------------------------------------------

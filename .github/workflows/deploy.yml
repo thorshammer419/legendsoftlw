@@ -25,23 +25,25 @@ jobs:
         run: npm run build
         working-directory: web
 
-      - name: Install SWA CLI and diagnose binary
-        run: |
-          npm install -g @azure/static-web-apps-cli
-          BINARY="$HOME/.swa/deploy/08e29138cd3dcda4ffda6d587aa580028110c1c7/StaticSitesClient"
-          # Pre-download the binary by running a harmless command
-          swa --version || true
-          if [ -f "$BINARY" ]; then
-            echo "=== ldd output ==="
-            ldd "$BINARY" || true
-          else
-            echo "Binary not yet downloaded — will appear after first swa deploy attempt"
-          fi
+      - name: Install .NET native dependencies
+        run: sudo apt-get install -y libicu70 libssl3 libgssapi-krb5-2
 
-      - name: Deploy to Azure Static Web Apps
+      - name: Install SWA CLI
+        run: npm install -g @azure/static-web-apps-cli
+
+      - name: Deploy (with ldd diagnostic on failure)
         run: |
-          swa deploy web/build --deployment-token "$AZURE_STATIC_WEB_APPS_API_TOKEN" --env production
-          BINARY="$HOME/.swa/deploy/08e29138cd3dcda4ffda6d587aa580028110c1c7/StaticSitesClient"
-          if [ -f "$BINARY" ]; then ldd "$BINARY" || true; fi
+          BINARY_DIR="$HOME/.swa/deploy"
+          swa deploy web/build --deployment-token "$AZURE_STATIC_WEB_APPS_API_TOKEN" --env production || {
+            echo "=== Deploy failed — running ldd diagnostic ==="
+            BINARY=$(find "$BINARY_DIR" -name "StaticSitesClient" 2>/dev/null | head -1)
+            if [ -n "$BINARY" ]; then
+              ldd "$BINARY" || true
+            else
+              echo "Binary not found in $BINARY_DIR"
+              ls -la "$BINARY_DIR" 2>/dev/null || echo "Directory does not exist"
+            fi
+            exit 1
+          }
         env:
           AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}

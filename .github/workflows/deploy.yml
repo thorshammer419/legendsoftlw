@@ -44,8 +44,8 @@ jobs:
 
           ./StaticSitesClient upload \
             --apiToken "$TOKEN" \
-            --appArtifactLocation "$GITHUB_WORKSPACE/web/build" \
-            --configFileLocation "$GITHUB_WORKSPACE/web/build/staticwebapp.config.json" \
+            --appArtifactLocation "web/build" \
+            --configFileLocation "web/build" \
             --skipAppBuild \
             --deploymentProvider "SwaCli"
         env:

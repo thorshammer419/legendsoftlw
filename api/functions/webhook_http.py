@@ -5,6 +5,7 @@ All Durable Functions client references removed — round lifecycle uses queues.
 
 import json
 import base64
+import os
 from datetime import datetime, timezone
 
 import azure.functions as func
@@ -13,6 +14,7 @@ from functions.activities.cosmos import (
     get_campaign, update_campaign, get_story_state, get_campaign_player, get_campaign_players,
     get_character, upsert_campaign_player, upsert_player, get_player,
     get_action_list, get_narrative_log,
+    get_allowed_user, upsert_allowed_user, delete_allowed_user, list_allowed_users,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -60,12 +62,22 @@ def _require_auth(req: func.HttpRequest):
     return email, None
 
 
+def _require_auth_approved(req: func.HttpRequest):
+    email, err = _require_auth(req)
+    if err:
+        return None, err
+    player = get_player(email)
+    if player and not player.get("approved", True):
+        return None, _error("Account not approved", 403)
+    return email, None
+
+
 # ---------------------------------------------------------------------------
 # SignalR negotiate
 # ---------------------------------------------------------------------------
 
 async def negotiate(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -82,7 +94,7 @@ async def negotiate(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def submit_action(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -112,7 +124,7 @@ async def submit_action(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def validate_action(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -149,7 +161,7 @@ async def validate_action(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def create_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -167,7 +179,7 @@ async def create_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def get_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -186,7 +198,7 @@ async def get_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -224,7 +236,7 @@ async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def get_character_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -236,7 +248,7 @@ async def get_character_handler(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -271,7 +283,7 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -327,7 +339,7 @@ async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -346,7 +358,7 @@ async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -365,7 +377,7 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
 # ---------------------------------------------------------------------------
 
 async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -400,7 +412,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -425,7 +437,7 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
 
 
 async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 
@@ -452,6 +464,9 @@ async def register_player(req: func.HttpRequest) -> func.HttpResponse:
     if err:
         return err
 
+    if not get_allowed_user(email):
+        return _error("Not on allowlist", 403)
+
     user = _get_user(req)
     player = get_player(email)
     if not player:
@@ -464,14 +479,74 @@ async def register_player(req: func.HttpRequest) -> func.HttpResponse:
             "identity_provider": user.get("identityProvider", "unknown"),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "notifications": {"email": True, "push": False, "push_subscription": None},
+            "approved": True,
         }
+        upsert_player(player)
+    elif not player.get("approved", True):
+        player["approved"] = True
         upsert_player(player)
 
     return _json_response(player)
 
 
+# ---------------------------------------------------------------------------
+# Allowlist management (system admin only)
+# ---------------------------------------------------------------------------
+
+def _is_system_admin(email: str) -> bool:
+    admins = os.environ.get("SYSTEM_ADMIN_EMAILS", "")
+    return email in [e.strip() for e in admins.split(",") if e.strip()]
+
+
+async def get_allowed_users_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+    if not _is_system_admin(email):
+        return _error("System admin access required", 403)
+    return _json_response(list_allowed_users())
+
+
+async def add_allowed_user_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+    if not _is_system_admin(email):
+        return _error("System admin access required", 403)
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+    target_email = body.get("email")
+    if not target_email:
+        return _error("email required")
+    upsert_allowed_user(target_email)
+    return _json_response({"status": "added"}, 201)
+
+
+async def remove_allowed_user_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+    if not _is_system_admin(email):
+        return _error("System admin access required", 403)
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+    target_email = body.get("email")
+    if not target_email:
+        return _error("email required")
+    delete_allowed_user(target_email)
+    player = get_player(target_email)
+    if player:
+        player["approved"] = False
+        upsert_player(player)
+    return _json_response({"status": "removed"})
+
+
 async def update_push_subscription(req: func.HttpRequest) -> func.HttpResponse:
-    email, err = _require_auth(req)
+    email, err = _require_auth_approved(req)
     if err:
         return err
 

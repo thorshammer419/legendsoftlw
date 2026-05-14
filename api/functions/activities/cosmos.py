@@ -375,6 +375,45 @@ def get_action_list(input_data: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Allowlist
+# ---------------------------------------------------------------------------
+
+def get_allowed_user(email: str) -> dict | None:
+    c = _container()
+    try:
+        return c.read_item(item=f"allowed_user_{email}", partition_key="allowed_users")
+    except exceptions.CosmosResourceNotFoundError:
+        return None
+
+
+def upsert_allowed_user(email: str) -> dict:
+    c = _container()
+    doc = {
+        "id": f"allowed_user_{email}",
+        "type": "allowed_user",
+        "campaign_id": "allowed_users",
+        "email": email,
+    }
+    return c.upsert_item(body=doc)
+
+
+def delete_allowed_user(email: str) -> None:
+    c = _container()
+    try:
+        c.delete_item(item=f"allowed_user_{email}", partition_key="allowed_users")
+    except exceptions.CosmosResourceNotFoundError:
+        pass
+
+
+def list_allowed_users() -> list[dict]:
+    c = _container()
+    return list(c.query_items(
+        query="SELECT * FROM c WHERE c.type = 'allowed_user'",
+        partition_key="allowed_users",
+    ))
+
+
+# ---------------------------------------------------------------------------
 # Narrative history (for novel export / catch-up)
 # ---------------------------------------------------------------------------
 

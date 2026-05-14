@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import PlayerCard from '../components/admin/PlayerCard';
@@ -13,6 +13,15 @@ export default function Admin({ user, isAdmin }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [allowedUsers, setAllowedUsers] = useState(null);
+  const [newAllowedEmail, setNewAllowedEmail] = useState('');
+  const [allowlistWorking, setAllowlistWorking] = useState(false);
+
+  useEffect(() => {
+    api.getAllowedUsers()
+      .then(setAllowedUsers)
+      .catch(() => {});
+  }, []);
 
   const notify = (msg) => {
     setNotification(msg);
@@ -56,6 +65,35 @@ export default function Admin({ user, isAdmin }) {
       notify(`Error: ${err.message}`);
       setDeleting(false);
       setConfirmDelete(false);
+    }
+  };
+
+  const addAllowedUser = async () => {
+    const email = newAllowedEmail.trim();
+    if (!email) return;
+    setAllowlistWorking(true);
+    try {
+      await api.addAllowedUser(email);
+      const updated = await api.getAllowedUsers();
+      setAllowedUsers(updated);
+      setNewAllowedEmail('');
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+    } finally {
+      setAllowlistWorking(false);
+    }
+  };
+
+  const removeAllowedUser = async (email) => {
+    setAllowlistWorking(true);
+    try {
+      await api.removeAllowedUser(email);
+      const updated = await api.getAllowedUsers();
+      setAllowedUsers(updated);
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+    } finally {
+      setAllowlistWorking(false);
     }
   };
 
@@ -190,6 +228,58 @@ export default function Admin({ user, isAdmin }) {
             Generates a professionally formatted PDF novel from the campaign narrative. Sent via email when complete.
           </p>
         </div>
+
+        {/* Access control — only visible to system admins (null = not loaded, [] = loaded but empty) */}
+        {allowedUsers !== null && (
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Access Control</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+              Only users on this list may log in. Removing a user revokes their access immediately.
+            </p>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="email"
+                placeholder="Add email address..."
+                value={newAllowedEmail}
+                onChange={(e) => setNewAllowedEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addAllowedUser()}
+                style={{ flex: 1, fontSize: 13 }}
+                disabled={allowlistWorking}
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={addAllowedUser}
+                disabled={allowlistWorking || !newAllowedEmail.trim()}
+              >
+                Add
+              </button>
+            </div>
+
+            {allowedUsers.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>No users on the allowlist.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {allowedUsers.map((u) => (
+                  <div key={u.email} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)',
+                  }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{u.email}</span>
+                    <button
+                      className="btn btn-sm"
+                      style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '2px 10px' }}
+                      onClick={() => removeAllowedUser(u.email)}
+                      disabled={allowlistWorking}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Danger zone */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, border: '1px solid var(--danger)' }}>

@@ -7,7 +7,9 @@ async function req(path, options = {}) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || res.statusText);
+    const err = new Error(text || res.statusText);
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -57,4 +59,10 @@ export const api = {
     req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
   deleteCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}`, { method: 'DELETE' }),
+
+  getAllowedUsers: () => req('/admin/users/allowed'),
+  addAllowedUser: (email) =>
+    req('/admin/users/allowed', { method: 'POST', body: JSON.stringify({ email }) }),
+  removeAllowedUser: (email) =>
+    req('/admin/users/allowed', { method: 'DELETE', body: JSON.stringify({ email }) }),
 };

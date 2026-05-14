@@ -107,6 +107,21 @@ async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.delete_campaign_handler(req)
 
 
+@app.route(route="admin/users/allowed", methods=["GET"])
+async def get_allowed_users(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.get_allowed_users_handler(req)
+
+
+@app.route(route="admin/users/allowed", methods=["POST"])
+async def add_allowed_user(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.add_allowed_user_handler(req)
+
+
+@app.route(route="admin/users/allowed", methods=["DELETE"])
+async def remove_allowed_user(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.remove_allowed_user_handler(req)
+
+
 # ===========================================================================
 # Timer trigger — checks for expired round deadlines every 15 minutes
 # ===========================================================================

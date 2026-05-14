@@ -5,6 +5,7 @@ import { api } from '../services/api';
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
     getUser().then(async (principal) => {
@@ -12,8 +13,12 @@ export function useAuth() {
         try {
           const player = await api.registerPlayer();
           setUser({ ...principal, ...player });
-        } catch {
-          setUser(principal);
+        } catch (err) {
+          if (err?.status === 403) {
+            setUnauthorized(true);
+          } else {
+            setUser(principal);
+          }
         }
       }
       setLoading(false);
@@ -23,5 +28,5 @@ export function useAuth() {
   const isAdmin = (campaign) =>
     campaign?.admin_emails?.includes(user?.userDetails) ?? false;
 
-  return { user, loading, isAdmin };
+  return { user, loading, isAdmin, unauthorized };
 }

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Login from './pages/Login';
+import Unauthorized from './pages/Unauthorized';
 import Dashboard from './pages/Dashboard';
 import CreateCampaign from './pages/CreateCampaign';
 import CharacterCreate from './pages/CharacterCreate';
@@ -10,7 +11,7 @@ import Game from './pages/Game';
 import Admin from './pages/Admin';
 
 export default function App() {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin, unauthorized } = useAuth();
 
   if (loading) {
     return (
@@ -20,6 +21,7 @@ export default function App() {
     );
   }
 
+  if (unauthorized) return <Unauthorized />;
   if (!user) return <Login />;
 
   return (

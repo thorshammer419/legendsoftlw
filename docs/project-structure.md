@@ -14,14 +14,11 @@ legends-of-tlw/
 │   ├── local.settings.json            # Local env vars (gitignored)
 │   │
 │   ├── functions/
-│   │   ├── webhook_http.py            # HTTP trigger — receives player actions
-│   │   │                              # Returns 200 OK immediately
-│   │   │                              # Starts/signals Durable orchestrator
-│   │   │
-│   │   ├── orchestrator.py            # Durable orchestrator — round lifecycle
-│   │   │                              # wait_for_external_event per player
-│   │   │                              # Race: all submitted vs timeout timer
-│   │   │                              # Respects schedule settings
+│   │   ├── webhook_http.py            # HTTP handlers — thin: parse → domain → respond
+│   │   ├── round_resolver.py          # Queue-triggered round pipeline coordinator
+│   │   ├── domain.py                  # Business logic layer (no HTTP/Azure imports)
+│   │   │                              # submit_player_action, create_new_campaign,
+│   │   │                              # save_character, join_campaign_as_observer
 │   │   │
 │   │   └── activities/
 │   │       ├── rag_query.py           # GPT-4.1-mini RAG query generation
@@ -32,14 +29,18 @@ legends-of-tlw/
 │   │       ├── action_list.py         # GPT-4.1-mini contextual action list
 │   │       ├── npc_introduction.py    # GPT-4.1 new player introduction
 │   │       ├── catchup_summary.py     # GPT-4.1-mini catch-up for new players
-│   │       ├── novel_export.py        # GPT-4.1 campaign novel generation
+│   │       ├── campaign_intro.py      # GPT-4.1 opening narrative on launch
+│   │       ├── novel_export.py        # GPT-4.1 campaign novel → PDF → Blob
+│   │       ├── scene_image.py         # gpt-image-1 scene illustration
 │   │       ├── cosmos.py              # Cosmos DB read/write helpers
-│   │       ├── signalr.py             # Azure SignalR broadcast
+│   │       ├── signalr.py             # Azure SignalR broadcast (logs delivery failures)
 │   │       ├── email.py               # Azure Communication Services email
 │   │       └── push.py                # Web push notifications (VAPID)
 │   │
 │   └── helpers/
-│       ├── prompt_builder.py          # Assembles all LLM prompts
+│       ├── character.py               # abbreviated_sheet(), format_action() — shared LLM serializers
+│       ├── llm.py                     # openai_client() factory (shared by all text activities)
+│       ├── queue.py                   # enqueue() — shared Azure Storage Queue helper
 │       ├── dice.py                    # Server-side dice utilities
 │       ├── schedule.py                # Round timeout + quiet hours logic
 │       ├── inactivity.py              # Player inactivity tracking
@@ -97,7 +98,10 @@ legends-of-tlw/
 │   │   │
 │   │   ├── hooks/
 │   │   │   ├── useSignalR.js          # Azure SignalR connection + events
-│   │   │   ├── useGame.js             # Game state management
+│   │   │   ├── useGame.js             # Coordinator: composes useGameState + useNarrativeFeed
+│   │   │   ├── useGameState.js        # Fetches/refreshes game state and campaign
+│   │   │   ├── useNarrativeFeed.js    # Feed state: seed from log, append live updates
+│   │   │   ├── useCampaign.js         # Campaign + party_status loading (Lobby, Admin)
 │   │   │   ├── useActionPanel.js      # Action submission state
 │   │   │   ├── useAuth.js             # Static Web Apps auth helpers
 │   │   │   └── useDice.js             # Dice rolling + crypto random

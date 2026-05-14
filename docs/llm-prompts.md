@@ -1,7 +1,9 @@
 # LLM Prompts
 
 All prompts for the Legends of TLW system. These are templates —
-`{variables}` are replaced at runtime by `api/helpers/prompt_builder.py`.
+`{variables}` are replaced at runtime. Each prompt lives inline in its
+activity module (e.g. `api/functions/activities/narrative.py` owns the
+narrative prompt; `api/helpers/character.py` owns character sheet serialization).
 
 ---
 

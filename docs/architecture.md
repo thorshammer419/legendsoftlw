@@ -66,6 +66,9 @@ JWT tokens returned from the `/negotiate` endpoint only need `nameid` (email) an
 
 ## Round Pipeline (Implemented)
 
+The pipeline has two phases: **blocking** (any failure aborts and re-queues the
+message) and **non-blocking** (failures are logged and the round continues).
+
 ```
 0. Campaign opening (fires once, triggered by admin launching from lobby):
    "campaign-intro" queue → GPT-4.1 opening narrative + gpt-image-1 scene image
@@ -78,12 +81,14 @@ JWT tokens returned from the `/negotiate` endpoint only need `nameid` (email) an
    privately in action panel before submission
    Character sheet actions: no validation needed
         ↓
-3. submit_action HTTP handler:
+3. submit_action HTTP handler (domain.submit_player_action):
    - Stores action in story_state.pending_actions
    - If all active players submitted → enqueues "resolve-round"
    Timer (every 15 min): checks round_deadline → enqueues "resolve-round"
         ↓
-4. resolve-round queue trigger (round_resolver.py):
+4. resolve-round queue trigger (round_resolver.py) — BLOCKING PHASE:
+   - Idempotency check: if round_status == "resolving", this is a retry —
+     reuse the locked round_number; otherwise increment + lock
         ↓
 5. GPT-4.1-mini: RAG query generation
    - Analyzes submitted player actions
@@ -103,6 +108,8 @@ JWT tokens returned from the `/negotiate` endpoint only need `nameid` (email) an
    - Outputs JSON: scene_type, HP changes, conditions,
      quest milestones, NPC updates, spell slots used
         ↓
+   — NON-BLOCKING PHASE (failures logged, round not aborted) —
+        ↓
 9. GPT-4.1-mini: Contextual action list generation (per active player)
         ↓
 10. gpt-image-1: Scene image generation
@@ -112,6 +119,7 @@ JWT tokens returned from the `/negotiate` endpoint only need `nameid` (email) an
     - URL saved in story_state.scene_image_url
         ↓
 11. SignalR broadcast: narrative + scene_image_url → all players
+    - Per-user delivery failures are logged with user ID + reason
         ↓
 12. Email + push notifications to players
         ↓
@@ -146,6 +154,22 @@ GET /campaigns/{id} → auto-join if not a member → "player-join" queue
 | POST | /campaigns/:id/admin/start-round | admin | Force-resolve current round |
 | POST | /campaigns/:id/admin/toggle-player | admin | Activate/deactivate a player |
 | POST | /campaigns/:id/admin/export-novel | admin | Queue novel PDF export |
+
+## Domain Layer
+
+Business logic lives in `api/functions/domain.py`, separate from HTTP handling.
+Each function takes plain dicts/primitives and returns a plain dict — no Azure
+Functions imports, no HTTP concerns, independently testable.
+
+| Function | Owned logic |
+|----------|-------------|
+| `submit_player_action` | Store action, check if all players submitted. Returns `{"round_ready": bool}` — handler enqueues resolution. |
+| `create_new_campaign` | Build campaign + story state + campaign_player docs atomically. |
+| `save_character` | Upsert character, mark player ready. Returns `{"first_completion": bool, ...}` — handler broadcasts lobby event. |
+| `join_campaign_as_observer` | Create campaign_player record for new observer. |
+
+`DomainError(message, http_status)` signals expected business-rule violations;
+handlers map it to the appropriate HTTP response without knowing the rule.
 
 ## Game Screen
 

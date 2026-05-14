@@ -42,12 +42,11 @@ jobs:
 
           TOKEN=$(echo "$AZURE_STATIC_WEB_APPS_API_TOKEN" | tr -d '[:space:]')
 
-          DEPLOYMENT_TOKEN="$TOKEN" \
-          DEPLOYMENT_ACTION="upload" \
-          DEPLOYMENT_PROVIDER="SwaCli" \
-          DEPLOYMENT_ENVIRONMENT="production" \
-          SKIP_APP_BUILD="true" \
-          REPOSITORY_BASE="$GITHUB_WORKSPACE/web/build" \
-          ./StaticSitesClient
+          ./StaticSitesClient upload \
+            --apiToken "$TOKEN" \
+            --appArtifactLocation "$GITHUB_WORKSPACE/web/build" \
+            --configFileLocation "$GITHUB_WORKSPACE/web/build/staticwebapp.config.json" \
+            --skipAppBuild \
+            --deploymentProvider "SwaCli"
         env:
           AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}

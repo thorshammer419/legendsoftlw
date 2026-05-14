@@ -20,7 +20,8 @@
             }
           },
           "login": {
-            "scopes": ["openid", "profile", "email"]
+            "scopes": ["openid", "profile", "email"],
+            "loginParameters": ["prompt=select_account"]
           }
         }
       }

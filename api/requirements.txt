@@ -10,3 +10,5 @@ openai
 PyJWT
 pywebpush
 reportlab
+pytest
+pytest-mock

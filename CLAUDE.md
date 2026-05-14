@@ -38,6 +38,7 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Game screen: narrative feed seeded from narrative log on page load (campaign intro now visible on entry)
 - [x] Email allowlist — invite-only access control; system admin management UI in Admin page; Unauthorized page for blocked users
 - [x] Auth: replaced Facebook login with Google (custom OIDC via staticwebapp.config.json); Microsoft login retained; credentials in Azure SWA env vars GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+- [x] CI/CD: GitHub Actions auto-deploy on push to main (.github/workflows/deploy.yml); builds React app with Node 24, deploys via SWA CLI 1.1.9; deployment token in GitHub secret AZURE_STATIC_WEB_APPS_API_TOKEN
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR

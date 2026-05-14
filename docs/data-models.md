@@ -111,10 +111,12 @@ All data stored in Azure Cosmos DB.
 {
   "id": "player_mark@example.com",
   "type": "player",
+  "campaign_id": "players",
   "email": "mark@example.com",
   "display_name": "Mark",
   "identity_provider": "google",
   "created_at": "2026-01-01T00:00:00Z",
+  "approved": true,
   "notifications": {
     "email": true,
     "push": true,
@@ -128,6 +130,25 @@ All data stored in Azure Cosmos DB.
   }
 }
 ```
+
+`approved` defaults to `True` when absent (backward compatible). Set to `False` by the allowlist removal endpoint to block access immediately.
+
+---
+
+## Allowed User Document
+
+Stored in the `game` container, partitioned under `"allowed_users"`.
+
+```json
+{
+  "id": "allowed_user_mark@example.com",
+  "type": "allowed_user",
+  "campaign_id": "allowed_users",
+  "email": "mark@example.com"
+}
+```
+
+Presence of this document is the gate for `POST /me`. Only system admins (see `SYSTEM_ADMIN_EMAILS` env var) can create or delete these. See `api/scripts/seed_allowlist.py` for initial seeding.
 
 ---
 

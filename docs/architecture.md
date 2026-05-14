@@ -134,26 +134,44 @@ GET /campaigns/{id} → auto-join if not a member → "player-join" queue
   → SignalR broadcast to all players
 ```
 
+## Access Control
+
+The app uses a two-layer auth model:
+
+1. **SWA authentication** — `staticwebapp.config.json` requires `authenticated` on `/*`. Unauthenticated visitors are redirected to the AAD login page.
+2. **Allowlist** — every authenticated user must also be on the allowlist in Cosmos DB before they can use the app. `POST /me` checks the allowlist and returns 403 if absent. All other endpoints use `_require_auth_approved`, which additionally checks `player.approved` (defaults to `True` when missing — backward compatible with pre-allowlist players).
+
+**Allowlist documents** are stored in the `game` container with `campaign_id = "allowed_users"` (a reserved partition key, like `"players"` for global player docs).
+
+**System admins** (identified by the `SYSTEM_ADMIN_EMAILS` env var) can manage the allowlist via `GET/POST/DELETE /admin/users/allowed`. The Admin page shows an Access Control card to system admin users only. Removing a user sets `player.approved = False` immediately, blocking their next API call even if still authenticated.
+
+**Frontend 403 handling** — `useAuth` detects `err.status === 403` from `registerPlayer` and sets `unauthorized = true`, which routes to the `Unauthorized` page with a contact email.
+
+**First deployment:** run `api/scripts/seed_allowlist.py` to seed the initial allowlist. Set `SYSTEM_ADMIN_EMAILS` in Azure Functions app configuration.
+
 ## HTTP API Surface
 
 | Method | Route | Auth | Purpose |
 |--------|-------|------|---------|
-| POST | /me | user | Register/fetch player profile |
-| PUT | /me/push-subscription | user | Save push notification subscription |
-| POST | /campaigns | user | Create campaign (status: lobby) |
-| GET | /campaigns/:id | user | Get campaign (auto-joins new players) |
-| DELETE | /campaigns/:id | admin | Soft-delete campaign |
-| GET | /campaigns/:id/state | user | Get story state, character, action list, party status, narrative log |
-| GET | /campaigns/:id/character | user | Get own character |
-| PUT | /campaigns/:id/character | user | Save character (broadcasts player_ready to lobby) |
-| POST | /campaigns/:id/submit-action | user | Submit round action |
-| POST | /campaigns/:id/validate-action | user | Pre-validate freeform action text |
-| GET/POST | /campaigns/:id/negotiate | user | SignalR connection negotiation |
-| POST | /campaigns/:id/lobby/message | user | Send lobby chat message |
-| POST | /campaigns/:id/lobby/launch | admin | Launch campaign (lobby → active) |
-| POST | /campaigns/:id/admin/start-round | admin | Force-resolve current round |
-| POST | /campaigns/:id/admin/toggle-player | admin | Activate/deactivate a player |
-| POST | /campaigns/:id/admin/export-novel | admin | Queue novel PDF export |
+| POST | /me | authenticated | Register player (allowlist-gated); sets approved:True |
+| PUT | /me/push-subscription | approved | Save push notification subscription |
+| POST | /campaigns | approved | Create campaign (status: lobby) |
+| GET | /campaigns/:id | approved | Get campaign (auto-joins new players) |
+| DELETE | /campaigns/:id | campaign admin | Soft-delete campaign |
+| GET | /campaigns/:id/state | approved | Get story state, character, action list, party status, narrative log |
+| GET | /campaigns/:id/character | approved | Get own character |
+| PUT | /campaigns/:id/character | approved | Save character (broadcasts player_ready to lobby) |
+| POST | /campaigns/:id/submit-action | approved | Submit round action |
+| POST | /campaigns/:id/validate-action | approved | Pre-validate freeform action text |
+| GET/POST | /campaigns/:id/negotiate | approved | SignalR connection negotiation |
+| POST | /campaigns/:id/lobby/message | approved | Send lobby chat message |
+| POST | /campaigns/:id/lobby/launch | campaign admin | Launch campaign (lobby → active) |
+| POST | /campaigns/:id/admin/start-round | campaign admin | Force-resolve current round |
+| POST | /campaigns/:id/admin/toggle-player | campaign admin | Activate/deactivate a player |
+| POST | /campaigns/:id/admin/export-novel | campaign admin | Queue novel PDF export |
+| GET | /admin/users/allowed | system admin | List all allowlisted emails |
+| POST | /admin/users/allowed | system admin | Add email to allowlist |
+| DELETE | /admin/users/allowed | system admin | Remove email; sets player.approved=False |
 
 ## Domain Layer
 

@@ -41,6 +41,11 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] CI/CD: GitHub Actions auto-deploy on push to main (.github/workflows/deploy.yml); builds React app with Node 24, deploys by calling StaticSitesClient binary directly (SWA CLI wrapper is unreliable — bypassed); deployment token in GitHub secret AZURE_STATIC_WEB_APPS_API_TOKEN
 - [x] Microsoft login fixed: adding customOpenIdConnectProviders disables SWA built-in AAD; fixed by adding explicit azureActiveDirectory config (app reg: f23a2db9-b671-4c2d-a86f-2d8539a37687, tenant: common, creds in SWA env vars AAD_CLIENT_ID / AAD_CLIENT_SECRET)
 - [x] Auth config deployment fixed: staticwebapp.config.json must live in web/public/ (not web/) so npm run build copies it into web/build/ and CI deploys it; without this the identity service cannot find the Google OIDC config
+- [x] Login page redesigned: provider image buttons (web/public/tlw_login_google.png, tlw_login_microsoft.png) with rounded corners and layered black glow; replaces generic purple gradient buttons
+- [x] Auth overhaul: Google via custom OIDC (prompt=select_account); Microsoft via built-in azureActiveDirectory (prompt=select_account); both show account picker after sign-out; AAD app reg has enableIdTokenIssuance=true and /.auth/logout/complete registered as post-logout redirect URI
+- [x] Sign-out: /.auth/logout?post_logout_redirect_uri=/ — clears SWA session; Microsoft shows a brief sign-out interstitial (~1s, no click) then auto-redirects back via /.auth/logout/complete; cannot be bypassed (SWA proxy strips Set-Cookie from function responses; custom OIDC fails on /common issuer mismatch)
+- [x] Azure Functions deployed separately via `func azure functionapp publish legendsoftlw-functions --python` (NOT via SWA CI — the CI only deploys the static frontend; --api flag would conflict with the existing standalone Functions app)
+- [x] Access control UI: long emails now truncate with ellipsis; Remove button stays anchored via flexShrink:0 + overflow:hidden on the row container
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR

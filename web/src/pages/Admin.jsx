@@ -1,37 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import PlayerCard from '../components/admin/PlayerCard';
+import { useCampaign } from '../hooks/useCampaign';
 
 export default function Admin({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
-  const [campaign, setCampaign] = useState(null);
-  const [players, setPlayers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { campaign, players, loading, error, refresh } = useCampaign(campaignId);
   const [starting, setStarting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notification, setNotification] = useState(null);
-
-  const load = async () => {
-    try {
-      const [camp, state] = await Promise.all([
-        api.getCampaign(campaignId),
-        api.getGameState(campaignId),
-      ]);
-      setCampaign(camp);
-      setPlayers(state?.party_status ?? []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notify = (msg) => {
     setNotification(msg);
@@ -43,7 +24,7 @@ export default function Admin({ user, isAdmin }) {
     try {
       await api.startRound(campaignId);
       notify('Round resolution started.');
-      load();
+      refresh();
     } catch (err) {
       notify(`Error: ${err.message}`);
     } finally {
@@ -81,7 +62,7 @@ export default function Admin({ user, isAdmin }) {
   const togglePlayer = async (email, status) => {
     try {
       await api.togglePlayer(campaignId, email, status);
-      load();
+      refresh();
     } catch (err) {
       notify(`Error: ${err.message}`);
     }

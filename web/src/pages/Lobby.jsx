@@ -2,43 +2,25 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSignalR } from '../hooks/useSignalR';
+import { useCampaign } from '../hooks/useCampaign';
 
 export default function Lobby({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
 
-  const [campaign, setCampaign] = useState(null);
-  const [players, setPlayers] = useState([]);
+  const { campaign, players, storyState, loading, refresh } = useCampaign(campaignId);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [launching, setLaunching] = useState(false);
-  const [loading, setLoading] = useState(true);
   const chatBottomRef = useRef(null);
 
-  const loadState = async () => {
-    try {
-      const [camp, state] = await Promise.all([
-        api.getCampaign(campaignId),
-        api.getGameState(campaignId),
-      ]);
-
-      // If campaign already launched, go straight to game
-      if (camp.status === 'active' && (state.story_state?.round_number ?? 0) > 0) {
-        navigate(`/game/${campaignId}`, { replace: true });
-        return;
-      }
-
-      setCampaign(camp);
-      setPlayers(state.party_status ?? []);
-    } catch (err) {
-      console.error('Lobby load failed:', err);
-    } finally {
-      setLoading(false);
+  // If campaign already launched, go straight to game
+  useEffect(() => {
+    if (campaign?.status === 'active' && (storyState?.round_number ?? 0) > 0) {
+      navigate(`/game/${campaignId}`, { replace: true });
     }
-  };
-
-  useEffect(() => { loadState(); }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [campaign, storyState, navigate, campaignId]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -54,10 +36,7 @@ export default function Lobby({ user, isAdmin }) {
       setMessages((prev) => [...prev, event]);
     }
     if (event.type === 'player_ready') {
-      // Refresh player list so the checkmark appears
-      api.getGameState(campaignId)
-        .then((s) => setPlayers(s.party_status ?? []))
-        .catch(() => {});
+      refresh();
       setMessages((prev) => [...prev, {
         type: 'system',
         text: `${event.display_name} created their character (${event.char_name}, ${event.char_class}).`,

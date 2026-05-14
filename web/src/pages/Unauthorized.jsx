@@ -40,7 +40,7 @@ export default function Unauthorized() {
         }}>
           To request access, contact{' '}
           <a
-            href="mailto:erickson.mark.a@gmail.com"
+            href="mailto:markerickson@rocketmail.com"
             style={{ color: '#9090d0', textDecoration: 'underline' }}
           >
             erickson.mark.a@gmail.com

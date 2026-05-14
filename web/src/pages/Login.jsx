@@ -71,7 +71,7 @@ export default function Login() {
           The untold stories of The Lord's Wrath, and other adventurers of the forgotten realms
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 150 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 75 }}>
           {providers.map(({ label, provider, image }) => (
             <button
               key={provider}

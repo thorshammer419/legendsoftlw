@@ -68,7 +68,7 @@ export default function Login() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[
-            { label: 'Continue with Facebook', provider: 'facebook' },
+            { label: 'Continue with Google', provider: 'google' },
             { label: 'Continue with Microsoft', provider: 'aad' },
           ].map(({ label, provider }) => (
             <button

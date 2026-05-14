@@ -37,6 +37,7 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Game screen: campaign background image (tlw_campaign_bg.png) with semi-transparent panel overlays
 - [x] Game screen: narrative feed seeded from narrative log on page load (campaign intro now visible on entry)
 - [x] Email allowlist — invite-only access control; system admin management UI in Admin page; Unauthorized page for blocked users
+- [x] Auth: replaced Facebook login with Google (custom OIDC via staticwebapp.config.json); Microsoft login retained; credentials in Azure SWA env vars GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR

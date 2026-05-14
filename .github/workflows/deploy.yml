@@ -44,7 +44,8 @@ jobs:
 
           ./StaticSitesClient upload \
             --apiToken "$TOKEN" \
-            --appArtifactLocation "web/build" \
+            --app "web" \
+            --outputLocation "build" \
             --configFileLocation "web/build" \
             --skipAppBuild \
             --deploymentProvider "SwaCli"

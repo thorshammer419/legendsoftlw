@@ -202,6 +202,11 @@ def _get_speed(characters: list[dict], email: str) -> int:
     return 30
 
 
+def append_narrative_round(campaign_id: str, round_number: int, narrative: str) -> None:
+    c = _container()
+    _append_narrative_round(c, campaign_id, round_number, narrative)
+
+
 def _append_narrative_round(container, campaign_id: str, round_number: int, narrative: str):
     doc_id = f"narrative_{campaign_id}"
     try:

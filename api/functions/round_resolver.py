@@ -14,7 +14,7 @@ from helpers.schedule import calculate_deadline
 from functions.activities.cosmos import (
     get_campaign, update_campaign, get_story_state, upsert_story_state,
     get_characters, get_active_npcs, get_campaign_players, upsert_campaign_player,
-    apply_state_update, get_narrative_log, get_character,
+    apply_state_update, get_narrative_log, get_character, append_narrative_round,
 )
 from functions.activities.rag_query import generate_rag_queries
 from functions.activities.search import execute_rag_queries
@@ -48,19 +48,140 @@ def _enqueue(queue_name: str, payload: dict):
 
 
 # ---------------------------------------------------------------------------
+# Non-blocking pipeline steps
+# ---------------------------------------------------------------------------
+
+def _try(label: str, fn) -> None:
+    """Run a non-blocking pipeline step. Logs on failure, never raises."""
+    try:
+        fn()
+    except Exception as e:
+        logger.warning("Non-blocking step '%s' failed: %s", label, e)
+
+
+def _generate_action_lists(ctx: dict) -> None:
+    campaign_id = ctx["campaign_id"]
+    new_story_state = ctx["new_story_state"]
+    new_characters = ctx["new_characters"]
+    active_emails = ctx["active_emails"]
+    char_by_email = {c["email"]: c for c in new_characters}
+    for email in active_emails:
+        char = char_by_email.get(email)
+        if char:
+            try:
+                generate_and_save_action_list({
+                    "campaign_id": campaign_id,
+                    "email": email,
+                    "character": char,
+                    "scene": new_story_state.get("current_scene", {}),
+                    "action_economy": new_story_state.get("action_economy", {}).get(email, {}),
+                })
+            except Exception as e:
+                logger.warning("Action list failed for %s: %s", email, e)
+
+
+def _generate_scene_image(ctx: dict) -> None:
+    """Generate scene image and mutate ctx['scene_image_url'] on success."""
+    campaign_id = ctx["campaign_id"]
+    narrative = ctx["narrative"]
+    story_state = ctx["story_state"]
+    state_update = ctx["state_update"]
+    new_story_state = ctx["new_story_state"]
+
+    new_scene = state_update.get("current_scene") or story_state.get("current_scene", {})
+    url = generate_scene_image({
+        "narrative": narrative,
+        "scene": new_scene,
+        "campaign_id": campaign_id,
+    })
+    ctx["scene_image_url"] = url
+    new_story_state["scene_image_url"] = url
+    upsert_story_state(new_story_state)
+
+
+def _send_notifications(ctx: dict) -> None:
+    campaign = ctx["campaign"]
+    campaign_players = ctx["campaign_players"]
+    campaign_id = ctx["campaign_id"]
+    send_round_notifications({
+        "campaign_players": campaign_players,
+        "campaign_name": campaign.get("name", "Your Campaign"),
+        "campaign_id": campaign_id,
+    })
+    send_round_push_notifications({
+        "campaign_players": campaign_players,
+        "campaign_name": campaign.get("name", "Your Campaign"),
+    })
+
+
+def _track_inactivity(ctx: dict) -> None:
+    campaign = ctx["campaign"]
+    campaign_id = ctx["campaign_id"]
+    campaign_players = ctx["campaign_players"]
+    submitted_actions = ctx["submitted_actions"]
+    state_update = ctx["state_update"]
+    story_state = ctx["story_state"]
+
+    scene_type = state_update.get("scene_type", story_state.get("scene_type", "exploration"))
+    thresholds = campaign.get("inactivity_thresholds", {"combat_encounters": 2, "scenes": 4})
+
+    for cp in campaign_players:
+        if cp.get("status") != "active":
+            continue
+        email = cp["email"]
+        if email in submitted_actions:
+            updated = reset_skip_counters(cp)
+        else:
+            updated = increment_skip_counters(cp, scene_type)
+            if should_mark_inactive(updated, thresholds, scene_type):
+                updated["status"] = "inactive"
+                updated["inactivated_at"] = datetime.now(timezone.utc).isoformat()
+                try:
+                    send_player_inactive_notification({
+                        "email": email,
+                        "campaign_name": campaign.get("name", ""),
+                        "campaign_id": campaign_id,
+                    })
+                except Exception as e:
+                    logger.warning("Inactive notification failed for %s: %s", email, e)
+        upsert_campaign_player(updated)
+
+    refreshed = get_campaign_players(campaign_id)
+    all_inactive = all(p.get("status") != "active" for p in refreshed)
+    if all_inactive:
+        campaign["status"] = "paused"
+        update_campaign(campaign)
+        try:
+            send_campaign_paused_notification({
+                "emails": [p["email"] for p in refreshed],
+                "campaign_name": campaign.get("name", ""),
+                "reason": "all players are currently inactive",
+            })
+        except Exception as e:
+            logger.warning("Campaign paused notification failed: %s", e)
+
+    if state_update.get("campaign_complete"):
+        campaign["status"] = "completed"
+        update_campaign(campaign)
+
+
+# ---------------------------------------------------------------------------
 # Round resolution
 # ---------------------------------------------------------------------------
 
 def resolve_round(campaign_id: str):
-    campaign = get_campaign(campaign_id)
     story_state = get_story_state(campaign_id)
 
-    round_number = story_state.get("round_number", 0) + 1
-    story_state["round_number"] = round_number
-    story_state["round_status"] = "resolving"
-    upsert_story_state(story_state)
+    # Idempotency: if already resolving on retry, reuse the committed round_number
+    if story_state.get("round_status") == "resolving":
+        round_number = story_state["round_number"]
+    else:
+        round_number = story_state.get("round_number", 0) + 1
+        story_state["round_number"] = round_number
+        story_state["round_status"] = "resolving"
+        upsert_story_state(story_state)
 
-    # Actions already stored in pending_actions by submit_action handler
+    campaign = get_campaign(campaign_id)
     submitted_actions = {
         email: data
         for email, data in story_state.get("pending_actions", {}).items()
@@ -110,62 +231,8 @@ def resolve_round(campaign_id: str):
 
     new_story_state = get_story_state(campaign_id)
     new_characters = get_characters(campaign_id)
-    char_by_email = {c["email"]: c for c in new_characters}
 
-    for email in active_emails:
-        char = char_by_email.get(email)
-        if char:
-            try:
-                generate_and_save_action_list({
-                    "campaign_id": campaign_id,
-                    "email": email,
-                    "character": char,
-                    "scene": new_story_state.get("current_scene", {}),
-                    "action_economy": new_story_state.get("action_economy", {}).get(email, {}),
-                })
-            except Exception as e:
-                logger.warning("Action list failed for %s: %s", email, e)
-
-    # Generate scene image (non-blocking — failure doesn't stop the round)
-    scene_image_url = None
-    try:
-        new_scene = state_update.get("current_scene") or story_state.get("current_scene", {})
-        scene_image_url = generate_scene_image({
-            "narrative": narrative,
-            "scene": new_scene,
-            "campaign_id": campaign_id,
-        })
-        new_story_state = get_story_state(campaign_id)
-        new_story_state["scene_image_url"] = scene_image_url
-        upsert_story_state(new_story_state)
-    except Exception as e:
-        logger.warning("Scene image generation failed: %s", e)
-
-    scene_type = state_update.get("scene_type", story_state.get("scene_type", "exploration"))
-    broadcast_narrative({
-        "campaign_id": campaign_id,
-        "round_number": round_number,
-        "narrative": narrative,
-        "scene_image_url": scene_image_url,
-        "player_emails": [p["email"] for p in campaign_players],
-        "state_summary": {
-            "scene_type": scene_type,
-            "current_scene": state_update.get("current_scene", {}),
-            "quest": state_update.get("quest", {}),
-        },
-    })
-
-    send_round_notifications({
-        "campaign_players": campaign_players,
-        "campaign_name": campaign.get("name", "Your Campaign"),
-        "campaign_id": campaign_id,
-    })
-    send_round_push_notifications({
-        "campaign_players": campaign_players,
-        "campaign_name": campaign.get("name", "Your Campaign"),
-    })
-
-    # Reset pending_actions and set next round deadline
+    # Finalize round: clear pending_actions, set deadline, mark waiting
     schedule = campaign.get("schedule", {})
     deadline = calculate_deadline(datetime.now(timezone.utc), schedule)
     new_story_state["pending_actions"] = {}
@@ -174,46 +241,41 @@ def resolve_round(campaign_id: str):
     new_story_state["round_deadline"] = deadline.isoformat() if deadline else None
     upsert_story_state(new_story_state)
 
-    # Inactivity tracking
-    thresholds = campaign.get("inactivity_thresholds", {"combat_encounters": 2, "scenes": 4})
-    for cp in campaign_players:
-        if cp.get("status") != "active":
-            continue
-        email = cp["email"]
-        if email in submitted_actions:
-            updated = reset_skip_counters(cp)
-        else:
-            updated = increment_skip_counters(cp, scene_type)
-            if should_mark_inactive(updated, thresholds, scene_type):
-                updated["status"] = "inactive"
-                updated["inactivated_at"] = datetime.now(timezone.utc).isoformat()
-                try:
-                    send_player_inactive_notification({
-                        "email": email,
-                        "campaign_name": campaign.get("name", ""),
-                        "campaign_id": campaign_id,
-                    })
-                except Exception as e:
-                    logger.warning("Inactive notification failed for %s: %s", email, e)
-        upsert_campaign_player(updated)
+    scene_type = state_update.get("scene_type", story_state.get("scene_type", "exploration"))
 
-    refreshed = get_campaign_players(campaign_id)
-    all_inactive = all(p.get("status") != "active" for p in refreshed)
-    if all_inactive:
-        campaign["status"] = "paused"
-        update_campaign(campaign)
-        try:
-            send_campaign_paused_notification({
-                "emails": [p["email"] for p in refreshed],
-                "campaign_name": campaign.get("name", ""),
-                "reason": "all players are currently inactive",
-            })
-        except Exception as e:
-            logger.warning("Campaign paused notification failed: %s", e)
+    ctx = {
+        "campaign_id": campaign_id,
+        "round_number": round_number,
+        "campaign": campaign,
+        "story_state": story_state,
+        "campaign_players": campaign_players,
+        "active_emails": active_emails,
+        "inactive_emails": inactive_emails,
+        "submitted_actions": submitted_actions,
+        "characters": characters,
+        "narrative": narrative,
+        "state_update": state_update,
+        "new_story_state": new_story_state,
+        "new_characters": new_characters,
+        "scene_image_url": None,
+    }
 
-    if state_update.get("campaign_complete"):
-        campaign["status"] = "completed"
-        update_campaign(campaign)
+    _try("action lists",  lambda: _generate_action_lists(ctx))
+    _try("scene image",   lambda: _generate_scene_image(ctx))
+    _try("broadcast",     lambda: broadcast_narrative({
+        "campaign_id": campaign_id,
+        "round_number": round_number,
+        "narrative": narrative,
+        "scene_image_url": ctx.get("scene_image_url"),
+        "player_emails": [p["email"] for p in campaign_players],
+        "state_summary": {
+            "scene_type": scene_type,
+            "current_scene": state_update.get("current_scene", {}),
+            "quest": state_update.get("quest", {}),
+        },
+    }))
+    _try("notifications", lambda: _send_notifications(ctx))
+    _try("inactivity",    lambda: _track_inactivity(ctx))
 
     logger.info("Round %d resolved for campaign %s (%d/%d submitted)",
                 round_number, campaign_id, len(submitted_actions), len(active_emails))
@@ -283,13 +345,11 @@ def campaign_intro_from_queue(msg) -> None:
     payload = json.loads(msg.get_body().decode("utf-8"))
     campaign_id = payload.get("campaign_id")
     try:
-        # Only run if no rounds have been resolved yet
         story_state = get_story_state(campaign_id)
         if story_state.get("round_number", 0) > 0:
             logger.info("Campaign %s already has rounds — skipping intro", campaign_id)
             return
 
-        # Check we haven't already sent an intro (narrative log round 0)
         narrative_log = get_narrative_log(campaign_id)
         if any(r.get("round") == 0 for r in narrative_log.get("rounds", [])):
             logger.info("Intro already sent for campaign %s", campaign_id)
@@ -308,7 +368,6 @@ def campaign_intro_from_queue(msg) -> None:
             "characters": characters,
         })
 
-        # Generate scene image
         scene_image_url = None
         try:
             scene_image_url = generate_scene_image({
@@ -321,14 +380,7 @@ def campaign_intro_from_queue(msg) -> None:
         except Exception as e:
             logger.warning("Intro scene image failed: %s", e)
 
-        # Store in narrative log as round 0
-        from functions.activities.cosmos import _append_narrative_round
-        from azure.cosmos import CosmosClient
-        import os as _os
-        _client = CosmosClient.from_connection_string(_os.environ["COSMOS_CONNECTION_STRING"])
-        _db = _client.get_database_client(_os.environ["COSMOS_DATABASE_NAME"])
-        _container = _db.get_container_client("game")
-        _append_narrative_round(_container, campaign_id, 0, narrative)
+        append_narrative_round(campaign_id, 0, narrative)
 
         all_players = get_campaign_players(campaign_id)
         broadcast_narrative({

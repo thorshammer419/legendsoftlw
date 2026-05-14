@@ -25,25 +25,13 @@ jobs:
         run: npm run build
         working-directory: web
 
-      - name: Install SWA CLI
-        run: npm install -g @azure/static-web-apps-cli
+      - name: Install SWA CLI 1.x
+        run: npm install -g @azure/static-web-apps-cli@1.1.9
 
-      - name: Deploy (verbose diagnostic)
+      - name: Deploy to Azure Static Web Apps
         run: |
-          # Run deploy, capture failure
-          SWA_CLI_DEBUG="*" swa deploy web/build \
+          swa deploy web/build \
             --deployment-token "$AZURE_STATIC_WEB_APPS_API_TOKEN" \
-            --env production || FAILED=1
-
-          # Find and inspect the binary
-          BINARY=$(find "$HOME/.swa" -name "StaticSitesClient" 2>/dev/null | head -1)
-          if [ -n "$BINARY" ]; then
-            echo "=== Binary info ==="
-            file "$BINARY"
-            echo "=== Running binary directly ==="
-            "$BINARY" 2>&1 || echo "Binary exit code: $?"
-          fi
-
-          [ "${FAILED:-0}" = "1" ] && exit 1 || true
+            --env production
         env:
           AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}

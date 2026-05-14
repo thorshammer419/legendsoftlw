@@ -43,7 +43,7 @@ export default function Unauthorized() {
             href="mailto:markerickson@rocketmail.com"
             style={{ color: '#9090d0', textDecoration: 'underline' }}
           >
-            erickson.mark.a@gmail.com
+            markerickson@rocketmail.com
           </a>
         </p>
       </div>

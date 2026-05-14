@@ -10,13 +10,7 @@ from datetime import datetime, timezone
 from openai import AzureOpenAI
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
-
-def _openai():
-    return AzureOpenAI(
-        azure_endpoint=os.environ["OPENAI_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
-        api_version="2024-02-01",
-    )
+from helpers.llm import openai_client
 
 
 def _image_openai():
@@ -43,7 +37,7 @@ def generate_scene_image(input_data: dict) -> str | None:
     scene_desc = scene.get("description", "")
 
     # Ask GPT-4.1-mini to distill a focused prompt
-    mini = _openai()
+    mini = openai_client()
     prompt_resp = mini.chat.completions.create(
         model=os.environ["OPENAI_MINI_DEPLOYMENT"],
         messages=[{

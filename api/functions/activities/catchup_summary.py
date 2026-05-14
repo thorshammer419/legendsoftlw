@@ -1,39 +1,40 @@
 """
-Catch-up summary generation — GPT-4.1-mini.
-Private "Previously in your adventure..." shown only to the joining/returning player.
+Catch-up summary — GPT-4.1-mini.
+"Previously in your adventure..." shown only to the joining/returning player.
 """
 
+import json
 import os
-from openai import AzureOpenAI
-from helpers.prompt_builder import build_catchup_summary_prompt
 
-
-def _openai():
-    return AzureOpenAI(
-        azure_endpoint=os.environ["OPENAI_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
-        api_version="2024-02-01",
-    )
+from helpers.llm import openai_client
 
 
 def generate_catchup_summary(input_data: dict) -> str:
     """
     input_data:
       story_state: dict
-      narrative_history: str  (full narrative log text)
+      narrative_history: str
       character: dict
     Returns the catch-up summary string.
     """
-    messages = build_catchup_summary_prompt(
-        story_state=input_data["story_state"],
-        narrative_history=input_data.get("narrative_history", ""),
-        character=input_data["character"],
-    )
+    story_state = input_data["story_state"]
+    narrative_history = input_data.get("narrative_history", "")
+    character = input_data["character"]
 
-    client = _openai()
-    response = client.chat.completions.create(
+    system = """You are a D&D 5e storyteller writing a "Previously in your adventure..." summary for a player who is joining or returning to an ongoing campaign. Write 2-3 paragraphs in an engaging narrative style. Cover the most important events, the current situation, and what the party is trying to accomplish. Do not reference game mechanics. Write as if narrating a fantasy story."""
+
+    user = f"""[STORY STATE]
+{json.dumps(story_state, indent=2)}
+
+[NARRATIVE HISTORY]
+{narrative_history}
+
+[CHARACTER JOINING]
+{character.get('name')} — {character.get('class')} — {character.get('backstory_summary', '')}"""
+
+    response = openai_client().chat.completions.create(
         model=os.environ["OPENAI_MINI_DEPLOYMENT"],
-        messages=messages,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.7,
         max_tokens=500,
     )

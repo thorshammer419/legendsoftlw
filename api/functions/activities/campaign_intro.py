@@ -4,15 +4,8 @@ Generates the DM's opening introduction when a new campaign begins.
 """
 
 import os
-from openai import AzureOpenAI
 
-
-def _openai():
-    return AzureOpenAI(
-        azure_endpoint=os.environ["OPENAI_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
-        api_version="2024-02-01",
-    )
+from helpers.llm import openai_client
 
 
 def generate_campaign_intro(input_data: dict) -> str:
@@ -66,8 +59,7 @@ Write an immersive opening narrative (3-4 paragraphs) that:
 
 Write in second person ("You find yourselves...") or vivid third person. Be epic. Be immersive."""
 
-    client = _openai()
-    response = client.chat.completions.create(
+    response = openai_client().chat.completions.create(
         model=os.environ["OPENAI_NARRATIVE_DEPLOYMENT"],
         messages=[
             {"role": "system", "content": "You are a master Dungeon Master with a talent for vivid, atmospheric storytelling."},

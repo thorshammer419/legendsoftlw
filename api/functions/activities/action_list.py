@@ -1,21 +1,14 @@
 """
-Contextual action list generation activity — GPT-4.1-mini.
+Contextual action list generation — GPT-4.1-mini.
 Generates up to 5 situational action suggestions per player per round.
 """
 
 import json
 import os
-from openai import AzureOpenAI
-from helpers.prompt_builder import build_action_list_prompt
+
+from helpers.character import abbreviated_sheet
+from helpers.llm import openai_client
 from functions.activities.cosmos import save_action_list
-
-
-def _openai():
-    return AzureOpenAI(
-        azure_endpoint=os.environ["OPENAI_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
-        api_version="2024-02-01",
-    )
 
 
 def generate_and_save_action_list(input_data: dict) -> list:
@@ -29,24 +22,55 @@ def generate_and_save_action_list(input_data: dict) -> list:
     action_economy = input_data.get("action_economy", {})
     conditions = character.get("conditions", [])
 
-    messages = build_action_list_prompt(character, scene, conditions, action_economy)
+    sheet = abbreviated_sheet(character)
+    scene_str = json.dumps(scene, indent=2) if scene else "{}"
 
-    client = _openai()
-    response = client.chat.completions.create(
+    system = """You are a D&D 5e rules assistant. Given a player's character sheet and the current scene, generate a list of situationally relevant actions available to this player this round.
+
+Rules:
+- Only suggest actions the character can actually perform given their class, level, remaining spell slots, and current conditions
+- Only suggest actions relevant to the current scene
+- Do not include basic actions already in the static list (Attack, Dodge, Dash, Disengage, Help, Hide, Grapple, Shove, Investigate, Perception, Persuasion, Deception, Intimidation, Athletics, Stealth)
+- Maximum 5 suggestions
+- Respond ONLY with a JSON array, no preamble
+
+[FORMAT]
+[
+  {
+    "action": "Cast Fireball",
+    "type": "spell",
+    "dice": [{"die": "d6", "count": 8, "purpose": "damage"}],
+    "spell_slot": 3,
+    "description": "8d6 fire damage in 20ft radius, DEX save DC 15",
+    "requires_target": true,
+    "target_type": "area"
+  }
+]"""
+
+    user = f"""[CHARACTER SHEET]
+{json.dumps(sheet, indent=2)}
+
+[CURRENT SCENE]
+{scene_str}
+
+[CURRENT CONDITIONS]
+{json.dumps(conditions)}
+
+[ACTION ECONOMY]
+{json.dumps(action_economy, indent=2)}"""
+
+    response = openai_client().chat.completions.create(
         model=os.environ["OPENAI_MINI_DEPLOYMENT"],
-        messages=messages,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.3,
         response_format={"type": "json_object"},
     )
 
-    raw = response.choices[0].message.content.strip()
-    parsed = json.loads(raw)
-
+    parsed = json.loads(response.choices[0].message.content.strip())
     if isinstance(parsed, list):
         action_list = parsed
     else:
         action_list = list(parsed.values())[0] if parsed else []
-
     action_list = action_list[:5]
 
     save_action_list({
@@ -54,5 +78,4 @@ def generate_and_save_action_list(input_data: dict) -> list:
         "email": input_data["email"],
         "action_list": action_list,
     })
-
     return action_list

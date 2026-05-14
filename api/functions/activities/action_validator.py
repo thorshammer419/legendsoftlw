@@ -1,21 +1,13 @@
 """
 Freeform action pre-validation — GPT-4.1-mini.
-Called synchronously from an HTTP trigger (not a Durable activity).
-Supports multi-turn conversation for the DM back-and-forth flow.
+Called synchronously from an HTTP trigger. Supports multi-turn DM back-and-forth.
 """
 
 import json
 import os
-from openai import AzureOpenAI
-from helpers.prompt_builder import build_freeform_validator_prompt
 
-
-def _openai():
-    return AzureOpenAI(
-        azure_endpoint=os.environ["OPENAI_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
-        api_version="2024-02-01",
-    )
+from helpers.character import abbreviated_sheet
+from helpers.llm import openai_client
 
 
 def validate_freeform_action(input_data: dict) -> dict:
@@ -27,20 +19,53 @@ def validate_freeform_action(input_data: dict) -> dict:
       conversation_history: list[dict]  (prior turns, may be empty)
     Returns {valid, dm_response, required_rolls}.
     """
-    messages = build_freeform_validator_prompt(
-        character=input_data["character"],
-        scene=input_data.get("scene", {}),
-        action_text=input_data["action_text"],
-        conversation_history=input_data.get("conversation_history"),
-    )
+    character = input_data["character"]
+    scene = input_data.get("scene", {})
+    action_text = input_data["action_text"]
+    conversation_history = input_data.get("conversation_history")
 
-    client = _openai()
-    response = client.chat.completions.create(
+    sheet = abbreviated_sheet(character)
+    scene_str = json.dumps(scene, indent=2) if scene else "{}"
+
+    system = f"""You are a D&D 5e Dungeon Master validating a player's intended action before the round resolves. Determine if the action is valid given the character's abilities and the current scene. If valid, determine what dice rolls are required. Respond ONLY with a JSON object.
+
+[FORMAT — Valid action]
+{{
+  "valid": true,
+  "dm_response": "Narrative response explaining what rolls are needed",
+  "required_rolls": [
+    {{
+      "description": "Roll description",
+      "die": "d20",
+      "count": 1,
+      "modifier_type": "strength",
+      "dc": 15
+    }}
+  ]
+}}
+
+[FORMAT — Invalid action]
+{{
+  "valid": false,
+  "dm_response": "Explanation of why this action is not possible",
+  "required_rolls": []
+}}
+
+[CHARACTER SHEET]
+{json.dumps(sheet, indent=2)}
+
+[CURRENT SCENE]
+{scene_str}"""
+
+    messages = [{"role": "system", "content": system}]
+    if conversation_history:
+        messages.extend(conversation_history)
+    messages.append({"role": "user", "content": f"[PROPOSED ACTION]\n{action_text}"})
+
+    response = openai_client().chat.completions.create(
         model=os.environ["OPENAI_MINI_DEPLOYMENT"],
         messages=messages,
         temperature=0,
         response_format={"type": "json_object"},
     )
-
-    raw = response.choices[0].message.content.strip()
-    return json.loads(raw)
+    return json.loads(response.choices[0].message.content.strip())

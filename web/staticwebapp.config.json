@@ -1,13 +1,6 @@
 {
   "auth": {
     "identityProviders": {
-      "azureActiveDirectory": {
-        "registration": {
-          "openIdIssuer": "https://login.microsoftonline.com/common/v2.0",
-          "clientIdSettingName": "AAD_CLIENT_ID",
-          "clientSecretSettingName": "AAD_CLIENT_SECRET"
-        }
-      },
       "customOpenIdConnectProviders": {
         "google": {
           "registration": {
@@ -17,6 +10,21 @@
             },
             "openIdConnectConfiguration": {
               "wellKnownOpenIdConfiguration": "https://accounts.google.com/.well-known/openid-configuration"
+            }
+          },
+          "login": {
+            "scopes": ["openid", "profile", "email"],
+            "loginParameters": ["prompt=select_account"]
+          }
+        },
+        "microsoft": {
+          "registration": {
+            "clientIdSettingName": "AAD_CLIENT_ID",
+            "clientCredential": {
+              "clientSecretSettingName": "AAD_CLIENT_SECRET"
+            },
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration"
             }
           },
           "login": {

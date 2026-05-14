@@ -12,6 +12,7 @@ export function login(provider) {
   window.location.href = `/.auth/login/${provider}?post_login_redirect_uri=/`;
 }
 
+
 export function logout() {
   window.location.href = '/.auth/logout?post_logout_redirect_uri=/';
 }

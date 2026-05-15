@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unzip -p workflow_logs3.zip \"0_deploy.txt\")",
+      "Bash(unzip -l workflow_logs3.zip)",
+      "Bash(DEPLOYMENT_TOKEN=c171db40e67bcd6168c7203ceeea4eb523d75db79e4501aa78935da104e835d307-844d5ec7-771b-4339-9ad0-3942073d806b0101628080fad410 DEPLOYMENT_ACTION=upload DEPLOYMENT_PROVIDER=SwaCli DEPLOYMENT_ENVIRONMENT=production SKIP_APP_BUILD=true REPOSITORY_BASE=/workspaces/legendsoftlw/web/build /home/codespace/.swa/deploy/08e29138cd3dcda4ffda6d587aa580028110c1c7/StaticSitesClient)"
+    ]
+  }
+}

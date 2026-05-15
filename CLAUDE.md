@@ -117,3 +117,15 @@ The interstitial is ~1 second and auto-redirects back via `/.auth/logout/complet
 - Google: `customOpenIdConnectProviders.google` in `staticwebapp.config.json`; login URL `/.auth/login/google`
 - Microsoft: built-in `azureActiveDirectory` in `staticwebapp.config.json`; login URL `/.auth/login/aad`
 - Both use `prompt=select_account` so the account picker appears after sign-out
+
+## Skills
+
+### /in-progress — live session context document
+Invoke `/in-progress` at the start of a working session to create `in-progress.md` in the project root. A Stop hook (registered in `~/.claude/settings.json`) automatically rewrites the file after every response, keeping it current. When a session disconnects, start a new session and read `in-progress.md` to be fully oriented — no other context needed.
+
+- **Skill definition**: `.claude/skills/in-progress/SKILL.md`
+- **Hook script**: `.claude/skills/in-progress/update_hook.py`
+- **Tests**: `.claude/skills/in-progress/tests/test_update_hook.py` (`cd .claude/skills/in-progress && python3 -m pytest tests/ -v`)
+- **Activation**: file existence — hook is a no-op when `in-progress.md` is absent
+- **Lifecycle**: invoke `/in-progress` to start → hook keeps it updated → delete the file when the feature is done
+- **Hook fires in**: local CLI (`claude` terminal) only — not in bridge/web mode

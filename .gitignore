@@ -30,6 +30,11 @@ data/srd_markdown/*.md
 .python_packages/
 .funcignore
 
+# Claude Code — session tracking (ephemeral, cleared when feature is done)
+in-progress.md
+# Claude Code — local permission overrides (machine-specific)
+.claude/settings.local.json
+
 # IDE
 .vscode/settings.json
 .idea/

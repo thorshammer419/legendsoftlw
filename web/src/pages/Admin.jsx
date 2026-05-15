@@ -16,6 +16,9 @@ export default function Admin({ user, isAdmin }) {
   const [allowedUsers, setAllowedUsers] = useState(null);
   const [newAllowedEmail, setNewAllowedEmail] = useState('');
   const [allowlistWorking, setAllowlistWorking] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordWorking, setPasswordWorking] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     api.getAllowedUsers()
@@ -57,9 +60,6 @@ export default function Admin({ user, isAdmin }) {
     setDeleting(true);
     try {
       await api.deleteCampaign(campaignId);
-      // Remove from localStorage cache
-      const stored = JSON.parse(localStorage.getItem('my_campaigns') || '[]');
-      localStorage.setItem('my_campaigns', JSON.stringify(stored.filter((c) => c.campaign_id !== campaignId)));
       navigate('/');
     } catch (err) {
       notify(`Error: ${err.message}`);
@@ -106,6 +106,33 @@ export default function Admin({ user, isAdmin }) {
     }
   };
 
+  const updatePassword = async (password) => {
+    setPasswordWorking(true);
+    try {
+      await api.updateCampaignPassword(campaignId, password);
+      setNewPassword('');
+      notify(password.trim() ? 'Password updated.' : 'Password removed.');
+      refresh();
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+    } finally {
+      setPasswordWorking(false);
+    }
+  };
+
+  const regenerateInvite = async () => {
+    setRegenerating(true);
+    try {
+      await api.regenerateInviteToken(campaignId);
+      notify('Invite link regenerated. Old link is now invalid.');
+      refresh();
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   if (error || (campaign && !isAdmin(campaign))) {
@@ -114,14 +141,16 @@ export default function Admin({ user, isAdmin }) {
         <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
         <h2>{error ? 'Could not load campaign' : 'Access denied'}</h2>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>
-          {error || 'Only campaign admins can access this page.'}
+          {error || 'Only the campaign creator can access this page.'}
         </p>
         <button className="btn btn-secondary" onClick={() => navigate('/')}>Back to Dashboard</button>
       </div>
     );
   }
 
-  const inviteUrl = `${window.location.origin}/game/${campaignId}`;
+  const inviteUrl = campaign?.invite_token
+    ? `${window.location.origin}/campaigns/invite/${campaign.invite_token}`
+    : null;
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
@@ -167,29 +196,79 @@ export default function Admin({ user, isAdmin }) {
             </div>
           </div>
 
+          {inviteUrl && (
+            <div>
+              <div className="label" style={{ marginBottom: 4 }}>Invite Link</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  readOnly
+                  value={inviteUrl}
+                  style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { navigator.clipboard.writeText(inviteUrl); notify('Invite link copied!'); }}
+                >
+                  Copy
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={regenerateInvite}
+                  disabled={regenerating}
+                  title="Generate a new link — old link stops working immediately"
+                >
+                  {regenerating ? '...' : 'Regenerate'}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
+                Anyone with this link can join without entering a password. Regenerate to invalidate the old link.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Campaign Settings */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <h3 style={{ margin: 0, color: 'var(--gold)' }}>Campaign Settings</h3>
+
           <div>
-            <div className="label" style={{ marginBottom: 4 }}>Invite Link</div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="label" style={{ marginBottom: 6 }}>Password</div>
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              {campaign?.password_hash
+                ? <span style={{ color: 'var(--gold)' }}>🔒 Password protected</span>
+                : <span style={{ color: 'var(--text-muted)' }}>Open — no password required</span>
+              }
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: campaign?.password_hash ? 8 : 0 }}>
               <input
-                type="text"
-                readOnly
-                value={inviteUrl}
-                style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}
-                onFocus={(e) => e.target.select()}
+                type="password"
+                placeholder={campaign?.password_hash ? 'Set new password...' : 'Add a password...'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                disabled={passwordWorking}
+                style={{ flex: 1 }}
               />
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(inviteUrl);
-                  notify('Invite link copied!');
-                }}
+                onClick={() => updatePassword(newPassword)}
+                disabled={passwordWorking || !newPassword.trim()}
               >
-                Copy
+                {passwordWorking ? 'Saving...' : 'Set'}
               </button>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginBottom: 0 }}>
-              Share this link with players to join the campaign.
-            </p>
+            {campaign?.password_hash && (
+              <button
+                className="btn btn-sm"
+                style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '4px 12px' }}
+                onClick={() => updatePassword('')}
+                disabled={passwordWorking}
+              >
+                Remove Password
+              </button>
+            )}
           </div>
         </div>
 

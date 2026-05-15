@@ -2,11 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout } from '../services/auth';
 import { api } from '../services/api';
+import CampaignCard from '../components/campaign/CampaignCard';
+import JoinModal from '../components/campaign/JoinModal';
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [joinError, setJoinError] = useState(null);
+  const [joinLoading, setJoinLoading] = useState(null);
+  const [joinModalCampaign, setJoinModalCampaign] = useState(null);
   const [showAccessControl, setShowAccessControl] = useState(false);
   const [allowedUsers, setAllowedUsers] = useState([]);
   const [newEmail, setNewEmail] = useState('');
@@ -14,10 +19,27 @@ export default function Dashboard({ user }) {
   const [acNotification, setAcNotification] = useState(null);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('my_campaigns') || '[]');
-    setCampaigns(stored);
-    setLoading(false);
+    api.listAllCampaigns()
+      .then(setCampaigns)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
+
+  const handleJoin = async (campaign) => {
+    if (campaign.is_password_protected) {
+      setJoinModalCampaign(campaign);
+      return;
+    }
+    setJoinLoading(campaign.campaign_id);
+    setJoinError(null);
+    try {
+      await api.joinCampaign(campaign.campaign_id);
+      navigate(`/campaigns/${campaign.campaign_id}/character`);
+    } catch (err) {
+      setJoinError({ id: campaign.campaign_id, message: err.message || 'Failed to join campaign' });
+      setJoinLoading(null);
+    }
+  };
 
   const openAccessControl = async () => {
     setShowAccessControl(true);
@@ -62,9 +84,19 @@ export default function Dashboard({ user }) {
     }
   };
 
+  const myCampaigns = campaigns.filter((c) => c.is_member);
+  const browseCampaigns = campaigns.filter((c) => !c.is_member);
   const displayName = user?.display_name || user?.userDetails?.split('@')[0] || 'Adventurer';
 
   return (
+    <>
+    {joinModalCampaign && (
+      <JoinModal
+        campaign={joinModalCampaign}
+        onClose={() => setJoinModalCampaign(null)}
+        onSuccess={(c) => navigate(`/campaigns/${c.campaign_id}/character`)}
+      />
+    )}
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div>
@@ -146,52 +178,54 @@ export default function Dashboard({ user }) {
 
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
-      ) : campaigns.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚔️</div>
-          <h2 style={{ marginBottom: 8 }}>No campaigns yet</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 20, fontSize: 13 }}>
-            Create a new campaign or ask your DM for an invite link.
-          </p>
-          <button className="btn btn-primary" onClick={() => navigate('/campaigns/new')}>
-            + Create Campaign
-          </button>
-        </div>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-            {campaigns.map((c) => (
-              <div key={c.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div
-                  style={{ flex: 1, cursor: 'pointer' }}
-                  onClick={() => {
-                    if (c.status === 'completed') navigate(`/campaigns/${c.campaign_id}/archive`);
-                    else if (c.status === 'lobby') navigate(`/campaigns/${c.campaign_id}/lobby`);
-                    else navigate(`/game/${c.campaign_id}`);
-                  }}
-                >
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.party_name}</div>
-                </div>
-                <span className={`badge ${c.status === 'active' ? 'badge-green' : c.status === 'lobby' ? 'badge-gold' : c.status === 'completed' ? 'badge-gold' : 'badge-gray'}`}>
-                  {c.status === 'lobby' ? 'in lobby' : c.status}
-                </span>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  title="Manage campaign"
-                  onClick={(e) => { e.stopPropagation(); navigate(`/campaigns/${c.campaign_id}/admin`); }}
-                  style={{ padding: '4px 8px' }}
-                >
-                  ⚙
-                </button>
+          {/* My Campaigns */}
+          <section style={{ marginBottom: 32 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>My Campaigns</h2>
+              <button className="btn btn-primary btn-sm" onClick={() => navigate('/campaigns/new')}>+ New</button>
+            </div>
+            {myCampaigns.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
+                  You haven't joined any campaigns yet. Create one or join one below.
+                </p>
               </div>
-            ))}
-          </div>
-          <button className="btn btn-secondary btn-full" onClick={() => navigate('/campaigns/new')}>
-            + Create New Campaign
-          </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {myCampaigns.map((c) => (
+                  <CampaignCard key={c.campaign_id} campaign={c} onJoin={handleJoin} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Browse */}
+          {browseCampaigns.length > 0 && (
+            <section>
+              <h2 style={{ margin: '0 0 12px' }}>Join a Campaign</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {browseCampaigns.map((c) => (
+                  <div key={c.campaign_id}>
+                    <CampaignCard
+                      campaign={c}
+                      onJoin={handleJoin}
+                      joining={joinLoading === c.campaign_id}
+                    />
+                    {joinError?.id === c.campaign_id && (
+                      <div style={{ fontSize: 12, color: 'var(--danger)', padding: '6px 2px' }}>
+                        {joinError.message}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>
+    </>
   );
 }

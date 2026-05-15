@@ -15,6 +15,7 @@ const DEFAULTS = {
   name: '',
   party_name: '',
   description: '',
+  password: '',
   max_players: 8,
   schedule: {
     timezone: 'America/Chicago',
@@ -48,18 +49,6 @@ export default function CreateCampaign() {
     setError(null);
     try {
       const campaign = await api.createCampaign(form);
-
-      // Cache in localStorage for Dashboard
-      const stored = JSON.parse(localStorage.getItem('my_campaigns') || '[]');
-      stored.unshift({
-        id: campaign.id,
-        campaign_id: campaign.campaign_id,
-        name: campaign.name,
-        party_name: campaign.party_name || '',
-        status: campaign.status || 'active',
-      });
-      localStorage.setItem('my_campaigns', JSON.stringify(stored));
-
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {
       console.error('Create campaign failed:', err);
@@ -118,6 +107,18 @@ export default function CreateCampaign() {
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="A brief synopsis of the adventure..."
               rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="password">Password <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional — leave blank for open access)</span></label>
+            <input
+              id="password"
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              placeholder="Leave blank for open campaign"
+              autoComplete="new-password"
             />
           </div>
 

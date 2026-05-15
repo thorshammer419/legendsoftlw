@@ -46,6 +46,16 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Sign-out: /.auth/logout?post_logout_redirect_uri=/ — clears SWA session; Microsoft shows a brief sign-out interstitial (~1s, no click) then auto-redirects back via /.auth/logout/complete; cannot be bypassed (SWA proxy strips Set-Cookie from function responses; custom OIDC fails on /common issuer mismatch)
 - [x] Azure Functions deployed separately via `func azure functionapp publish legendsoftlw-functions --python` (NOT via SWA CI — the CI only deploys the static frontend; --api flag would conflict with the existing standalone Functions app)
 - [x] Access control UI: long emails now truncate with ellipsis; Remove button stays anchored via flexShrink:0 + overflow:hidden on the row container
+- [x] Role hierarchy: campaign creator renamed from `role:"admin"` to `role:"creator"`; `creator_emails` replaces `admin_emails` on campaign doc; system admin (env var `SYSTEM_ADMIN_EMAILS`) bypasses all creator gates
+- [x] Campaign browser: GET /campaigns returns all lobby+active campaigns with `is_member`, `is_password_protected`, `player_count`; `password_hash` never exposed; auto-join on GET /campaigns/:id removed (non-members get 403)
+- [x] Campaign creation: generates `invite_token` (32-char URL-safe secret) and optional bcrypt `password_hash` on campaign doc; password field in CreateCampaign.jsx
+- [x] Explicit join flow: POST /campaigns/:id/join — checks invite_token first (bypasses password), then password (bcrypt), then open join; returns 201/200/403/404/409 as appropriate; active campaigns enqueue `player-join` on success
+- [x] Password-protected join UI: JoinModal.jsx opens for locked campaigns; handles wrong-password and success states; Dashboard routes open/locked join through handleJoin
+- [x] Magic invite links: GET /campaigns/invite/:token resolves token → public campaign info; JoinCampaign.jsx landing page joins with token bypass; route added to App.jsx
+- [x] Password management (Admin): PATCH /campaigns/:id/admin/settings sets or clears bcrypt password; Campaign Settings card in Admin.jsx
+- [x] Invite token regeneration: POST /campaigns/:id/admin/regenerate-invite generates new token (old link immediately invalid); Regenerate button in Admin.jsx and Lobby.jsx
+- [x] Dashboard rewritten: API-driven via GET /campaigns; splits into "My Campaigns" (is_member=true) and "Join a Campaign" (is_member=false); no more localStorage
+- [x] TDD: pytest-asyncio installed (asyncio_mode=auto was already set); 18 new tests covering domain.py (invite token, password hash) and handlers (list_campaigns_handler, join_campaign_handler); all tests pass
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR
@@ -70,7 +80,7 @@ See individual docs files for full detail on each system.
 
 ## Developer Notes
 - Owner/initial player group: "The Lord's Wrath" (3-9 players, max 8-9)
-- Campaign creator is admin by default
+- Role hierarchy: System admin (env var `SYSTEM_ADMIN_EMAILS`, no barriers) → Campaign Creator (`role:"creator"`, owns the campaign) → Player (`role:"player"`)
 - No player is ever permanently removed from a campaign
 - All infrastructure on Azure
 - Python for all backend/function code

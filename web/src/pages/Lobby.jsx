@@ -13,6 +13,7 @@ export default function Lobby({ user, isAdmin }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const chatBottomRef = useRef(null);
 
   // If campaign already launched, go straight to game
@@ -63,6 +64,18 @@ export default function Lobby({ user, isAdmin }) {
     }
   };
 
+  const regenerateInvite = async () => {
+    setRegenerating(true);
+    try {
+      await api.regenerateInviteToken(campaignId);
+      refresh();
+    } catch (err) {
+      console.error('Regenerate failed:', err);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   const launch = async () => {
     setLaunching(true);
     try {
@@ -75,9 +88,9 @@ export default function Lobby({ user, isAdmin }) {
   };
 
   const readyCount = players.filter((p) => p.character_ready).length;
-  const adminEmails = campaign?.admin_emails ?? [];
+  const creatorEmails = campaign?.creator_emails ?? [];
   const myEmail = user?.userDetails;
-  const iAmAdmin = isAdmin ? isAdmin(campaign) : adminEmails.includes(myEmail);
+  const iAmAdmin = isAdmin ? isAdmin(campaign) : creatorEmails.includes(myEmail);
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
@@ -116,8 +129,8 @@ export default function Lobby({ user, isAdmin }) {
                   {p.character_ready ? '✓' : '○'}
                 </span>
                 <span style={{ flex: 1, fontSize: 14 }}>{p.email.split('@')[0]}</span>
-                {p.role === 'admin' && (
-                  <span style={{ fontSize: 11, color: 'var(--gold)', fontStyle: 'italic' }}>admin</span>
+                {p.role === 'creator' && (
+                  <span style={{ fontSize: 11, color: 'var(--gold)', fontStyle: 'italic' }}>creator</span>
                 )}
                 {!p.character_ready && (
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>creating character...</span>
@@ -168,6 +181,41 @@ export default function Lobby({ user, isAdmin }) {
         </form>
       </div>
 
+      {/* Invite link — creator/admin only */}
+      {iAmAdmin && campaign?.invite_token && (
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <h3 style={{ margin: 0, color: 'var(--gold)' }}>Invite Link</h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              readOnly
+              value={`${window.location.origin}/campaigns/invite/${campaign.invite_token}`}
+              style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)' }}
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigator.clipboard.writeText(
+                `${window.location.origin}/campaigns/invite/${campaign.invite_token}`
+              )}
+            >
+              Copy
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={regenerateInvite}
+              disabled={regenerating}
+              title="Generate a new link — old link stops working immediately"
+            >
+              {regenerating ? '...' : 'Regenerate'}
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+            Anyone with this link can join without entering a password.
+          </p>
+        </div>
+      )}
+
       {/* Launch / waiting */}
       {iAmAdmin ? (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -188,7 +236,7 @@ export default function Lobby({ user, isAdmin }) {
         <div className="card" style={{ textAlign: 'center', padding: '20px 16px' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
-            Waiting for the campaign admin to launch the adventure...
+            Waiting for the campaign creator to launch the adventure...
           </p>
         </div>
       )}

@@ -55,9 +55,24 @@ async def update_push_subscription(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.update_push_subscription(req)
 
 
+@app.route(route="campaigns", methods=["GET"])
+async def list_campaigns_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.list_campaigns_handler(req)
+
+
 @app.route(route="campaigns", methods=["POST"])
 async def create_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.create_campaign_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/join", methods=["POST"])
+async def join_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.join_campaign_handler(req)
+
+
+@app.route(route="campaigns/invite/{token}", methods=["GET"])
+async def resolve_invite_token_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.resolve_invite_token_handler(req)
 
 
 @app.route(route="campaigns/{campaign_id}", methods=["GET"])
@@ -108,6 +123,16 @@ async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
 @app.route(route="campaigns/{campaign_id}/admin/export-novel", methods=["POST"])
 async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.admin_export_novel(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/settings", methods=["PATCH"])
+async def admin_update_settings(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_update_settings_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/regenerate-invite", methods=["POST"])
+async def admin_regenerate_invite(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_regenerate_invite_handler(req)
 
 
 @app.route(route="campaigns/{campaign_id}/lobby/message", methods=["POST"])

@@ -10,5 +10,7 @@ openai
 PyJWT
 pywebpush
 reportlab
+bcrypt
 pytest
+pytest-asyncio
 pytest-mock

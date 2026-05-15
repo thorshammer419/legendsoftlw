@@ -22,7 +22,7 @@ export default function PlayerCard({ player, campaignId, onToggle }) {
           <span className={`badge ${isActive ? 'badge-green' : 'badge-gray'}`}>
             {isActive ? 'Active' : 'Inactive'}
           </span>
-          {player.role === 'admin' && <span className="badge badge-gold">Admin</span>}
+          {player.role === 'creator' && <span className="badge badge-gold">Creator</span>}
         </div>
         {!isActive && (
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>

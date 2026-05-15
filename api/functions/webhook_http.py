@@ -6,8 +6,10 @@ All Durable Functions client references removed — round lifecycle uses queues.
 import json
 import base64
 import os
+import secrets
 from datetime import datetime, timezone
 
+import bcrypt
 import azure.functions as func
 
 from functions.activities.cosmos import (
@@ -15,6 +17,7 @@ from functions.activities.cosmos import (
     get_character, upsert_campaign_player, upsert_player, get_player,
     get_action_list, get_narrative_log,
     get_allowed_user, upsert_allowed_user, delete_allowed_user, list_allowed_users,
+    list_all_campaigns, get_campaign_by_invite_token,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -190,11 +193,118 @@ async def get_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
         return _error("Campaign not found", 404)
 
     cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
-    if not cp:
-        join_campaign_as_observer(campaign_id, email)
-        enqueue("player-join", {"campaign_id": campaign_id, "email": email})
+    if not cp and not _is_system_admin(email):
+        return _error("Not a member of this campaign", 403)
 
     return _json_response(campaign)
+
+
+async def list_campaigns_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaigns = list_all_campaigns()
+    result = []
+    for c in campaigns:
+        cid = c["campaign_id"]
+        players = get_campaign_players(cid)
+        active_players = [p for p in players if p.get("status") == "active"]
+        is_member = any(p["email"] == email for p in players)
+        creator_email = c.get("created_by", "")
+        result.append({
+            "campaign_id": cid,
+            "name": c.get("name", ""),
+            "party_name": c.get("party_name", ""),
+            "description": c.get("description", ""),
+            "status": c.get("status", ""),
+            "creator_display_name": creator_email.split("@")[0] if creator_email else "Unknown",
+            "max_players": c.get("max_players", 8),
+            "player_count": len(active_players),
+            "is_password_protected": bool(c.get("password_hash")),
+            "is_member": is_member,
+        })
+    return _json_response(result)
+
+
+async def join_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        campaign = get_campaign(campaign_id)
+    except Exception:
+        return _error("Campaign not found", 404)
+
+    if campaign.get("status") in ("deleted", "completed"):
+        return _error("Campaign not found", 404)
+
+    if campaign.get("status") not in ("lobby", "active"):
+        return _error("Campaign is not open for new players", 400)
+
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if cp:
+        return _json_response({"status": "already_member", "campaign_id": campaign_id})
+
+    players = get_campaign_players(campaign_id)
+    active_count = sum(1 for p in players if p.get("status") == "active")
+    if active_count >= campaign.get("max_players", 8):
+        return _error("This campaign is full", 409)
+
+    body = {}
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        pass
+
+    provided_token = body.get("invite_token", "").strip()
+    if provided_token:
+        if provided_token != campaign.get("invite_token"):
+            return _error("Invalid invite link", 403)
+    elif campaign.get("password_hash"):
+        provided = body.get("password", "").strip()
+        if not provided:
+            return _error("Password required", 403)
+        if not bcrypt.checkpw(provided.encode(), campaign["password_hash"].encode()):
+            return _error("Incorrect password", 403)
+
+    join_campaign_as_observer(campaign_id, email)
+    if campaign.get("status") == "active":
+        enqueue("player-join", {"campaign_id": campaign_id, "email": email})
+
+    return _json_response({"status": "joined", "campaign_id": campaign_id}, 201)
+
+
+async def resolve_invite_token_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    token = req.route_params.get("token")
+    campaign = get_campaign_by_invite_token(token)
+    if not campaign or campaign.get("status") in ("deleted", "completed"):
+        return _error("Invite link not found or expired", 404)
+
+    cid = campaign["campaign_id"]
+    players = get_campaign_players(cid)
+    active_players = [p for p in players if p.get("status") == "active"]
+    is_member = any(p["email"] == email for p in players)
+    creator_email = campaign.get("created_by", "")
+
+    return _json_response({
+        "campaign_id": cid,
+        "name": campaign.get("name", ""),
+        "party_name": campaign.get("party_name", ""),
+        "description": campaign.get("description", ""),
+        "status": campaign.get("status", ""),
+        "creator_display_name": creator_email.split("@")[0] if creator_email else "Unknown",
+        "max_players": campaign.get("max_players", 8),
+        "player_count": len(active_players),
+        "is_password_protected": bool(campaign.get("password_hash")),
+        "is_member": is_member,
+    })
 
 
 async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
@@ -290,7 +400,7 @@ async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if email not in campaign.get("admin_emails", []):
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
     try:
@@ -346,7 +456,7 @@ async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if email not in campaign.get("admin_emails", []):
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
     story_state = get_story_state(campaign_id)
@@ -365,11 +475,59 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if email not in campaign.get("admin_emails", []):
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
     enqueue("novel-export", {"campaign_id": campaign_id})
     return _json_response({"status": "export_queued"})
+
+
+async def admin_update_settings_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        campaign = get_campaign(campaign_id)
+    except Exception:
+        return _error("Campaign not found", 404)
+
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
+        return _error("Admin access required", 403)
+
+    try:
+        body = req.get_json() or {}
+    except ValueError:
+        return _error("Invalid JSON")
+
+    if "password" in body:
+        raw = (body["password"] or "").strip()
+        campaign["password_hash"] = (
+            bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode() if raw else None
+        )
+
+    update_campaign(campaign)
+    return _json_response({"status": "updated"})
+
+
+async def admin_regenerate_invite_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        campaign = get_campaign(campaign_id)
+    except Exception:
+        return _error("Campaign not found", 404)
+
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
+        return _error("Admin access required", 403)
+
+    campaign["invite_token"] = secrets.token_urlsafe(32)
+    update_campaign(campaign)
+    return _json_response({"invite_token": campaign["invite_token"]})
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +577,7 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if email not in campaign.get("admin_emails", []):
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
     campaign["status"] = "active"
@@ -447,7 +605,7 @@ async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except Exception:
         return _error("Campaign not found", 404)
 
-    if email not in campaign.get("admin_emails", []):
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
     campaign["status"] = "deleted"

@@ -26,7 +26,8 @@ export function useAuth() {
   }, []);
 
   const isAdmin = (campaign) =>
-    campaign?.admin_emails?.includes(user?.userDetails) ?? false;
+    user?.is_system_admin ||
+    (campaign?.creator_emails?.includes(user?.userDetails) ?? false);
 
   return { user, loading, isAdmin, unauthorized };
 }

@@ -19,6 +19,7 @@ legends-of-tlw/
 │   │   ├── domain.py                  # Business logic layer (no HTTP/Azure imports)
 │   │   │                              # submit_player_action, create_new_campaign,
 │   │   │                              # save_character, join_campaign_as_observer
+│   │   │                              # (invite_token + bcrypt password_hash on create)
 │   │   │
 │   │   └── activities/
 │   │       ├── rag_query.py           # GPT-4.1-mini RAG query generation
@@ -45,6 +46,14 @@ legends-of-tlw/
 │       ├── schedule.py                # Round timeout + quiet hours logic
 │       ├── inactivity.py              # Player inactivity tracking
 │       └── srd_loader.py              # SRD chunking + indexing utilities
+│
+│   └── tests/
+│       ├── conftest.py                # Shared fixtures (cosmos_mocks, campaign_id, player_email, etc.)
+│       ├── test_domain.py             # Unit tests for domain.py (DomainError, submit_player_action, create_new_campaign, save_character, join_campaign_as_observer)
+│       ├── test_list_campaigns.py     # Handler tests: GET /campaigns (is_member, is_password_protected, player_count, no password_hash)
+│       ├── test_join_campaign.py      # Handler tests: POST /campaigns/:id/join (open, already-member, full, deleted, password, invite token, active enqueue)
+│       ├── test_allowlist_endpoints.py
+│       └── test_register_player.py
 │
 ├── web/                               # React frontend
 │   ├── public/
@@ -83,17 +92,22 @@ legends-of-tlw/
 │   │   │   │   ├── QuestLog.jsx       # Quest objectives + milestones
 │   │   │   │   └── PartyStatus.jsx    # Who has submitted this round
 │   │   │   │
+│   │   │   ├── campaign/
+│   │   │   │   ├── CampaignCard.jsx   # Member card (click-to-navigate) + browse card (join, lock icon)
+│   │   │   │   └── JoinModal.jsx      # Password prompt modal; auto-focus input, error display
+│   │   │   │
 │   │   │   └── admin/
 │   │   │       ├── AdminDrawer.jsx    # Quick-access in-game admin panel
 │   │   │       └── PlayerCard.jsx     # Per-player admin controls
 │   │   │
 │   │   ├── pages/
 │   │   │   ├── Login.jsx              # Social login page
-│   │   │   ├── Dashboard.jsx          # Campaign list + create button
-│   │   │   ├── CreateCampaign.jsx     # New campaign setup form
+│   │   │   ├── Dashboard.jsx          # Campaign browser: "My Campaigns" + "Join a Campaign" (API-driven)
+│   │   │   ├── CreateCampaign.jsx     # New campaign setup form (optional password field)
+│   │   │   ├── JoinCampaign.jsx       # Magic invite link landing page (resolves token → join)
 │   │   │   ├── CharacterCreate.jsx    # Full D&D 5e character creation form
 │   │   │   ├── Game.jsx               # Main game UI (hybrid layout)
-│   │   │   ├── Admin.jsx              # Full admin settings page
+│   │   │   ├── Admin.jsx              # Full admin settings page (password mgmt, invite regen)
 │   │   │   └── CampaignArchive.jsx    # Completed campaign viewer
 │   │   │
 │   │   ├── hooks/

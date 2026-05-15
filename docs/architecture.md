@@ -33,7 +33,9 @@ lobby → active → completed
 
 ```
 1. Admin creates campaign → goes to character creation → lands in Lobby
-2. Other players join via invite link → auto-joined → create character → land in Lobby
+2. Other players find campaign on Dashboard or follow magic invite link → POST /campaigns/:id/join
+   (invite_token bypasses password; correct password required otherwise; open campaigns join freely)
+   → create character → land in Lobby
 3. Lobby shows:
    - Party roster with checkmark per player who has created their character
    - Real-time chat (SignalR "lobbyEvent" events, type: "chat")
@@ -128,11 +130,22 @@ message) and **non-blocking** (failures are logged and the round continues).
 
 ## New Player / Returning Player Flow (joining mid-campaign)
 ```
-GET /campaigns/{id} → auto-join if not a member → "player-join" queue
+Dashboard or invite link → POST /campaigns/{id}/join → join_campaign_as_observer()
+  → enqueue "player-join" (active campaigns only)
   → GPT-4.1-mini: catch-up summary ("Previously on your adventure...")
   → GPT-4.1: cinematic introduction of new character to existing party
   → SignalR broadcast to all players
 ```
+
+## Role Hierarchy
+
+| Role | How identified | What they can do |
+|------|---------------|-----------------|
+| System admin | `SYSTEM_ADMIN_EMAILS` env var | Manage allowlist, bypass all campaign creator gates |
+| Campaign creator | `role:"creator"` in campaign_player; email in `creator_emails` on campaign doc | Launch, configure, delete campaign; manage password + invite token |
+| Player | `role:"player"` in campaign_player | Submit actions, save character, view game state |
+
+`creator_emails` is a list so multiple admins can be added per campaign in the future. The `_is_system_admin()` helper in `webhook_http.py` checks the env var and short-circuits all creator gates.
 
 ## Access Control
 
@@ -158,8 +171,13 @@ The app uses a two-layer auth model:
 | POST | /me | authenticated | Register player (allowlist-gated); sets approved:True |
 | PUT | /me/push-subscription | approved | Save push notification subscription |
 | POST | /campaigns | approved | Create campaign (status: lobby) |
-| GET | /campaigns/:id | approved | Get campaign (auto-joins new players) |
+| GET | /campaigns | approved | List all lobby+active campaigns (is_member, is_password_protected, player_count) |
+| GET | /campaigns/:id | approved | Get campaign (non-members get 403) |
+| POST | /campaigns/:id/join | approved | Join campaign (invite_token bypasses password; bcrypt check otherwise) |
+| GET | /campaigns/invite/:token | approved | Resolve invite token → public campaign info |
 | DELETE | /campaigns/:id | campaign admin | Soft-delete campaign |
+| PATCH | /campaigns/:id/admin/settings | campaign admin | Update/clear campaign password |
+| POST | /campaigns/:id/admin/regenerate-invite | campaign admin | Regenerate invite token (old link invalid) |
 | GET | /campaigns/:id/state | approved | Get story state, character, action list, party status, narrative log |
 | GET | /campaigns/:id/character | approved | Get own character |
 | PUT | /campaigns/:id/character | approved | Save character (broadcasts player_ready to lobby) |

@@ -163,10 +163,10 @@ class TestCreateNewCampaign:
         assert result["created_by"] == "dm@example.com"
         assert result["type"] == "campaign"
 
-    def test_creator_is_admin(self, cosmos_mocks):
+    def test_creator_is_creator(self, cosmos_mocks):
         result = create_new_campaign("dm@example.com", {})
 
-        assert "dm@example.com" in result["admin_emails"]
+        assert "dm@example.com" in result["creator_emails"]
 
     def test_default_name_when_not_provided(self, cosmos_mocks):
         result = create_new_campaign("dm@example.com", {})
@@ -210,12 +210,12 @@ class TestCreateNewCampaign:
         assert state["round_number"] == 0
         assert state["round_status"] == "waiting"
 
-    def test_creator_campaign_player_is_admin_and_active(self, cosmos_mocks):
+    def test_creator_campaign_player_is_creator_and_active(self, cosmos_mocks):
         create_new_campaign("dm@example.com", {})
 
         cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
         assert cp["email"] == "dm@example.com"
-        assert cp["role"] == "admin"
+        assert cp["role"] == "creator"
         assert cp["status"] == "active"
 
     def test_custom_schedule_is_preserved(self, cosmos_mocks):
@@ -229,6 +229,38 @@ class TestCreateNewCampaign:
         r2 = create_new_campaign("dm@example.com", {})
 
         assert r1["campaign_id"] != r2["campaign_id"]
+
+    # invite_token
+    def test_invite_token_is_generated(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {})
+
+        assert "invite_token" in result
+        assert len(result["invite_token"]) > 20
+
+    def test_each_campaign_gets_unique_invite_token(self, cosmos_mocks):
+        r1 = create_new_campaign("dm@example.com", {})
+        r2 = create_new_campaign("dm@example.com", {})
+
+        assert r1["invite_token"] != r2["invite_token"]
+
+    # password_hash
+    def test_no_password_leaves_hash_null(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {})
+
+        assert result["password_hash"] is None
+
+    def test_password_is_stored_as_bcrypt_hash_not_plaintext(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {"password": "secret123"})
+
+        assert result["password_hash"] is not None
+        assert result["password_hash"] != "secret123"
+        assert result["password_hash"].startswith("$2b$")
+
+    def test_password_hash_verifies_against_original(self, cosmos_mocks):
+        import bcrypt
+        result = create_new_campaign("dm@example.com", {"password": "secret123"})
+
+        assert bcrypt.checkpw(b"secret123", result["password_hash"].encode())
 
 
 # ---------------------------------------------------------------------------

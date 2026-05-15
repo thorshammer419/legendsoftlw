@@ -5,8 +5,11 @@ Each function takes plain dicts/primitives and returns a plain dict result.
 No HTTP concerns. No Azure Functions imports. Independently testable.
 """
 
+import secrets
 import uuid
 from datetime import datetime, timezone
+
+import bcrypt
 
 from functions.activities.cosmos import (
     get_campaign_player, get_campaign_players, get_story_state, upsert_story_state,
@@ -63,6 +66,10 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
     """
     campaign_id = str(uuid.uuid4())[:8]
     now = datetime.now(timezone.utc).isoformat()
+    invite_token = secrets.token_urlsafe(32)
+
+    raw_password = body.get("password", "").strip()
+    password_hash = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode() if raw_password else None
 
     schedule = body.get("schedule", {
         "timeout_enabled": True,
@@ -84,7 +91,9 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
         "status": "lobby",
         "created_by": creator_email,
         "created_at": now,
-        "admin_emails": [creator_email],
+        "creator_emails": [creator_email],
+        "invite_token": invite_token,
+        "password_hash": password_hash,
         "max_players": body.get("max_players", 8),
         "schedule": schedule,
         "inactivity_thresholds": {"combat_encounters": 2, "scenes": 4},
@@ -120,7 +129,7 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
         "campaign_id": campaign_id,
         "email": creator_email,
         "status": "active",
-        "role": "admin",
+        "role": "creator",
         "consecutive_combat_skips": 0,
         "consecutive_scene_skips": 0,
         "manually_set_inactive": False,

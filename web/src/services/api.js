@@ -19,8 +19,12 @@ export const api = {
   updatePushSubscription: (subscription) =>
     req('/me/push-subscription', { method: 'PUT', body: JSON.stringify({ subscription }) }),
 
+  listAllCampaigns: () => req('/campaigns'),
+  resolveInviteToken: (token) => req(`/campaigns/invite/${token}`),
   createCampaign: (data) => req('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   getCampaign: (id) => req(`/campaigns/${id}`),
+  joinCampaign: (campaignId, opts = {}) =>
+    req(`/campaigns/${campaignId}/join`, { method: 'POST', body: JSON.stringify(opts) }),
   getGameState: (id) => req(`/campaigns/${id}/state`),
 
   getCharacter: (campaignId) => req(`/campaigns/${campaignId}/character`),
@@ -39,6 +43,11 @@ export const api = {
     }),
 
   negotiate: (campaignId) => req(`/campaigns/${campaignId}/negotiate`),
+
+  updateCampaignPassword: (campaignId, password) =>
+    req(`/campaigns/${campaignId}/admin/settings`, { method: 'PATCH', body: JSON.stringify({ password }) }),
+  regenerateInviteToken: (campaignId) =>
+    req(`/campaigns/${campaignId}/admin/regenerate-invite`, { method: 'POST' }),
 
   startRound: (campaignId) =>
     req(`/campaigns/${campaignId}/admin/start-round`, { method: 'POST' }),

@@ -36,6 +36,25 @@ def get_all_active_campaigns() -> list:
     ))
 
 
+def list_all_campaigns() -> list:
+    """All non-deleted campaigns (lobby + active) for the campaign browser."""
+    c = _container()
+    return list(c.query_items(
+        query="SELECT * FROM c WHERE c.type = 'campaign' AND c.status IN ('lobby', 'active')",
+        enable_cross_partition_query=True,
+    ))
+
+
+def get_campaign_by_invite_token(token: str) -> dict | None:
+    c = _container()
+    results = list(c.query_items(
+        query="SELECT * FROM c WHERE c.type = 'campaign' AND c.invite_token = @token",
+        parameters=[{"name": "@token", "value": token}],
+        enable_cross_partition_query=True,
+    ))
+    return results[0] if results else None
+
+
 def create_campaign(doc: dict) -> dict:
     c = _container()
     campaign_id = doc["id"].removeprefix("campaign_")

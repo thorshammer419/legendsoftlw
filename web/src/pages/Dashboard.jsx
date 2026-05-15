@@ -89,7 +89,19 @@ export default function Dashboard({ user }) {
   const displayName = user?.display_name || user?.userDetails?.split('@')[0] || 'Adventurer';
 
   return (
-    <>
+    <div style={{
+      position: 'fixed', inset: 0,
+      overflowY: 'auto',
+      backgroundImage: 'url(/tlw_campaign_bg.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }}>
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        pointerEvents: 'none',
+      }} />
     {joinModalCampaign && (
       <JoinModal
         campaign={joinModalCampaign}
@@ -97,7 +109,7 @@ export default function Dashboard({ user }) {
         onSuccess={(c) => navigate(`/campaigns/${c.campaign_id}/character`)}
       />
     )}
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div>
           <h1 style={{ marginBottom: 2 }}>Welcome, {displayName}</h1>
@@ -226,6 +238,6 @@ export default function Dashboard({ user }) {
         </>
       )}
     </div>
-    </>
+    </div>
   );
 }

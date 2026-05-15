@@ -95,7 +95,20 @@ export default function Lobby({ user, isAdmin }) {
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+    <div style={{
+      position: 'fixed', inset: 0,
+      overflowY: 'auto',
+      backgroundImage: 'url(/tlw_lobby_bg.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }}>
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        pointerEvents: 'none',
+      }} />
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header */}
       <div>
@@ -240,6 +253,7 @@ export default function Lobby({ user, isAdmin }) {
           </p>
         </div>
       )}
+    </div>
     </div>
   );
 }

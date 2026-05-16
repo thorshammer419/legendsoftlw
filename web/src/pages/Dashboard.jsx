@@ -109,7 +109,7 @@ export default function Dashboard({ user }) {
         onSuccess={(c) => navigate(`/campaigns/${c.campaign_id}/character`)}
       />
     )}
-    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: 24 }}>
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '48px 24px 24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div>
           <h1 style={{ marginBottom: 2 }}>Welcome, {displayName}</h1>

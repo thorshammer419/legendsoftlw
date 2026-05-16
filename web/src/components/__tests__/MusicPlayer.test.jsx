@@ -27,19 +27,19 @@ test('mute toggle button is present with an accessible label on mount', () => {
   expect(screen.getByRole('button', { name: /mute music/i })).toBeInTheDocument();
 });
 
-test('clicking mute changes the icon to 🔇', async () => {
+test('clicking mute changes button label to unmute', async () => {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
   renderPlayer();
   await user.click(screen.getByRole('button', { name: /mute music/i }));
-  expect(screen.getByText('🔇')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /unmute music/i })).toBeInTheDocument();
 });
 
-test('clicking mute again restores 🔊', async () => {
+test('clicking mute again restores mute label', async () => {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
   renderPlayer();
   await user.click(screen.getByRole('button', { name: /mute music/i }));
   await user.click(screen.getByRole('button', { name: /unmute music/i }));
-  expect(screen.getByText('🔊')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /mute music/i })).toBeInTheDocument();
 });
 
 test('audio does not replay before 60 seconds after song ends', () => {

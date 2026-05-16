@@ -108,7 +108,7 @@ export default function Lobby({ user, isAdmin }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '48px 24px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header */}
       <div>

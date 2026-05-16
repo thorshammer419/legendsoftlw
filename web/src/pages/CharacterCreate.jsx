@@ -139,7 +139,7 @@ export default function CharacterCreate({ user }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-    <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: 24 }}>
+    <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         {step === 2 ? (
           <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Back</button>

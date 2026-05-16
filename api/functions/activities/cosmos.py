@@ -291,6 +291,14 @@ def upsert_campaign_player(doc: dict) -> dict:
     return c.upsert_item(body=doc)
 
 
+def delete_campaign_player(campaign_id: str, email: str) -> None:
+    c = _container()
+    try:
+        c.delete_item(item=f"campaign_player_{campaign_id}_{email}", partition_key=campaign_id)
+    except exceptions.CosmosResourceNotFoundError:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Character
 # ---------------------------------------------------------------------------
@@ -322,6 +330,14 @@ def get_characters(campaign_id: str) -> list[dict]:
 def upsert_character(doc: dict) -> dict:
     c = _container()
     return c.upsert_item(body=doc)
+
+
+def delete_character(campaign_id: str, email: str) -> None:
+    c = _container()
+    try:
+        c.delete_item(item=f"character_{campaign_id}_{email}", partition_key=campaign_id)
+    except exceptions.CosmosResourceNotFoundError:
+        pass
 
 
 # ---------------------------------------------------------------------------

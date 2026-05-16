@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
+import { useSignalR } from '../hooks/useSignalR';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -66,6 +67,9 @@ export default function CharacterCreate({ user }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [maxLevel, setMaxLevel] = useState(null); // null = loading
+  const [creatorEmails, setCreatorEmails] = useState([]);
+  const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
+  const [actioning, setActioning] = useState(false);
 
   const [identity, setIdentity] = useState({
     name: '',
@@ -84,10 +88,38 @@ export default function CharacterCreate({ user }) {
       .then((c) => {
         const max = c.max_starting_level ?? 20;
         setMaxLevel(max);
+        setCreatorEmails(c.creator_emails ?? []);
         setIdentity((i) => ({ ...i, level: max }));
       })
       .catch(() => setMaxLevel(20));
   }, [campaignId]);
+
+  const myEmail = user?.userDetails;
+  const iAmCreator = creatorEmails.includes(myEmail);
+
+  useSignalR(campaignId, {
+    onLobbyEvent: (event) => {
+      if (event.type === 'campaign_deleted') {
+        navigate('/', { replace: true });
+      }
+    },
+  });
+
+  const handleConfirmedAction = async () => {
+    setActioning(true);
+    try {
+      if (confirmAction === 'cancel') {
+        await api.deleteCampaign(campaignId);
+      } else {
+        await api.leaveCampaign(campaignId);
+      }
+      navigate('/', { replace: true });
+    } catch (err) {
+      console.error('Action failed:', err);
+      setActioning(false);
+      setConfirmAction(null);
+    }
+  };
 
   const selectedClass = CLASSES.find((c) => c.name === identity.class_name) || CLASSES[0];
   const conMod = mod(scores.constitution);
@@ -137,6 +169,7 @@ export default function CharacterCreate({ user }) {
   };
 
   return (
+    <>
     <div style={{
       position: 'fixed', inset: 0,
       overflowY: 'auto',
@@ -157,8 +190,15 @@ export default function CharacterCreate({ user }) {
         ) : (
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
         )}
-        <h1 style={{ margin: 0 }}>Create Character</h1>
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
+        <h1 style={{ margin: 0, flex: 1 }}>Create Character</h1>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
+        <button
+          className="btn btn-sm"
+          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+          onClick={() => setConfirmAction(iAmCreator ? 'cancel' : 'leave')}
+        >
+          {iAmCreator ? 'Cancel Campaign' : 'Leave Campaign'}
+        </button>
       </div>
 
       {step === 1 && maxLevel === null && (
@@ -312,5 +352,44 @@ export default function CharacterCreate({ user }) {
       )}
     </div>
     </div>
+
+    {/* Confirmation modal */}
+    {confirmAction && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}>
+        <div className="card" style={{ maxWidth: 400, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: 0, color: 'var(--danger)' }}>
+            {confirmAction === 'cancel' ? 'Cancel Campaign?' : 'Leave Campaign?'}
+          </h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
+            {confirmAction === 'cancel'
+              ? 'This will permanently delete the campaign and remove all players. This cannot be undone.'
+              : 'You will be removed from this campaign and taken back to the Dashboard.'}
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={actioning}
+            >
+              Keep Playing
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+              onClick={handleConfirmedAction}
+              disabled={actioning}
+            >
+              {actioning ? 'Working...' : confirmAction === 'cancel' ? 'Yes, Cancel Campaign' : 'Yes, Leave Campaign'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

@@ -14,6 +14,8 @@ export default function Lobby({ user, isAdmin }) {
   const [sending, setSending] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
+  const [actioning, setActioning] = useState(false);
   const chatBottomRef = useRef(null);
 
   // If campaign already launched, go straight to game
@@ -31,6 +33,14 @@ export default function Lobby({ user, isAdmin }) {
   const onLobbyEvent = (event) => {
     if (event.type === 'launched') {
       navigate(`/game/${campaignId}`, { replace: true });
+      return;
+    }
+    if (event.type === 'campaign_deleted') {
+      navigate('/', { replace: true });
+      return;
+    }
+    if (event.type === 'player_left') {
+      refresh();
       return;
     }
     if (event.type === 'chat') {
@@ -87,6 +97,23 @@ export default function Lobby({ user, isAdmin }) {
     }
   };
 
+  const handleConfirmedAction = async () => {
+    setActioning(true);
+    try {
+      if (confirmAction === 'cancel') {
+        await api.deleteCampaign(campaignId);
+        navigate('/', { replace: true });
+      } else {
+        await api.leaveCampaign(campaignId);
+        navigate('/', { replace: true });
+      }
+    } catch (err) {
+      console.error('Action failed:', err);
+      setActioning(false);
+      setConfirmAction(null);
+    }
+  };
+
   const readyCount = players.filter((p) => p.character_ready).length;
   const creatorEmails = campaign?.creator_emails ?? [];
   const myEmail = user?.userDetails;
@@ -95,6 +122,7 @@ export default function Lobby({ user, isAdmin }) {
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   return (
+    <>
     <div style={{
       position: 'fixed', inset: 0,
       overflowY: 'auto',
@@ -114,7 +142,14 @@ export default function Lobby({ user, isAdmin }) {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
-          <h1 style={{ margin: 0 }}>{campaign?.name}</h1>
+          <h1 style={{ margin: 0, flex: 1 }}>{campaign?.name}</h1>
+          <button
+            className="btn btn-sm"
+            style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+            onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
+          >
+            {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
+          </button>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
           {campaign?.party_name} · Waiting for adventurers to gather
@@ -255,5 +290,44 @@ export default function Lobby({ user, isAdmin }) {
       )}
     </div>
     </div>
+
+    {/* Confirmation modal */}
+    {confirmAction && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}>
+        <div className="card" style={{ maxWidth: 400, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: 0, color: 'var(--danger)' }}>
+            {confirmAction === 'cancel' ? 'Cancel Campaign?' : 'Leave Campaign?'}
+          </h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
+            {confirmAction === 'cancel'
+              ? 'This will permanently delete the campaign and remove all players. This cannot be undone.'
+              : 'You will be removed from this campaign and taken back to the Dashboard.'}
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setConfirmAction(null)}
+              disabled={actioning}
+            >
+              Keep Playing
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+              onClick={handleConfirmedAction}
+              disabled={actioning}
+            >
+              {actioning ? 'Working...' : confirmAction === 'cancel' ? 'Yes, Cancel Campaign' : 'Yes, Leave Campaign'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

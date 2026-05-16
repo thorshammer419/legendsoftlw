@@ -1,19 +1,23 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CharacterCreate from '../CharacterCreate';
 import { api } from '../../services/api';
 
+const mockNavigate = jest.fn();
+
 jest.mock('../../services/api', () => ({
   api: {
     getCampaign: jest.fn(),
     saveCharacter: jest.fn(),
+    leaveCampaign: jest.fn(),
+    deleteCampaign: jest.fn(),
   },
 }));
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
   useParams: () => ({ campaignId: 'test-campaign' }),
 }));
 
@@ -23,15 +27,40 @@ jest.mock('../../components/character/ClassDiePicker', () =>
   }
 );
 
+let lobbyEventHandler = null;
+jest.mock('../../hooks/useSignalR', () => ({
+  useSignalR: (_campaignId, handlers) => {
+    lobbyEventHandler = handlers.onLobbyEvent;
+  },
+}));
+
 function renderPage() {
+  lobbyEventHandler = null;
   return render(
     <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
       <Routes>
-        <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate />} />
+        <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'player@example.com' }} />} />
       </Routes>
     </MemoryRouter>
   );
 }
+
+function renderPageAsCreator() {
+  lobbyEventHandler = null;
+  return render(
+    <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
+      <Routes>
+        <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'creator@example.com' }} />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockNavigate.mockReset();
+  lobbyEventHandler = null;
+})
 
 // ---------------------------------------------------------------------------
 // Loading spinner
@@ -120,5 +149,72 @@ describe('Backwards compatibility', () => {
     const select = screen.getByLabelText(/starting level/i);
     const values = Array.from(select.options).map((o) => Number(o.value));
     expect(values).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cancel / Leave Campaign
+// ---------------------------------------------------------------------------
+
+describe('Cancel/Leave Campaign button', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue({
+      max_starting_level: 5,
+      creator_emails: ['creator@example.com'],
+    });
+  });
+
+  test('non-creator sees "Leave Campaign" button after load', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
+  });
+
+  test('creator sees "Cancel Campaign" button after load', async () => {
+    renderPageAsCreator();
+    await waitFor(() => expect(screen.getByRole('button', { name: /cancel campaign/i })).toBeInTheDocument());
+  });
+
+  test('clicking Leave button shows confirmation modal', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    expect(screen.getByText(/leave campaign\?/i)).toBeInTheDocument();
+  });
+
+  test('"Keep Playing" dismisses the modal', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await user.click(screen.getByRole('button', { name: /keep playing/i }));
+    expect(screen.queryByText(/leave campaign\?/i)).not.toBeInTheDocument();
+  });
+
+  test('confirming leave calls leaveCampaign and navigates to Dashboard', async () => {
+    api.leaveCampaign.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await user.click(screen.getByRole('button', { name: /yes, leave campaign/i }));
+    await waitFor(() => expect(api.leaveCampaign).toHaveBeenCalledWith('test-campaign'));
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+  });
+});
+
+describe('SignalR campaign_deleted in CharacterCreate', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue({
+      max_starting_level: 5,
+      creator_emails: ['creator@example.com'],
+    });
+  });
+
+  test('campaign_deleted event navigates to Dashboard', async () => {
+    renderPage();
+    await waitFor(() => expect(lobbyEventHandler).not.toBeNull());
+    act(() => lobbyEventHandler({ type: 'campaign_deleted' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
   });
 });

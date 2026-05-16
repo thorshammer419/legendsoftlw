@@ -12,6 +12,7 @@ from functions.domain import (
     create_new_campaign,
     save_character,
     join_campaign_as_observer,
+    leave_campaign,
 )
 
 
@@ -436,3 +437,69 @@ class TestJoinCampaignAsObserver:
         cosmos_mocks["upsert_campaign_player"].assert_called_once()
         saved = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
         assert saved["email"] == player_email
+
+
+# ---------------------------------------------------------------------------
+# leave_campaign
+# ---------------------------------------------------------------------------
+
+class TestLeaveCampaign:
+    def test_returns_email_and_display_name(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = {"display_name": "Thandor"}
+
+        result = leave_campaign(campaign_id, player_email)
+
+        assert result["email"] == player_email
+        assert result["display_name"] == "Thandor"
+
+    def test_raises_403_when_not_a_member(self, cosmos_mocks, campaign_id, player_email):
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        with pytest.raises(DomainError) as exc:
+            leave_campaign(campaign_id, player_email)
+
+        assert exc.value.http_status == 403
+
+    def test_raises_403_when_caller_is_creator(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["role"] = "creator"
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+
+        with pytest.raises(DomainError) as exc:
+            leave_campaign(campaign_id, player_email)
+
+        assert exc.value.http_status == 403
+
+    def test_deletes_campaign_player_record(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        leave_campaign(campaign_id, player_email)
+
+        cosmos_mocks["delete_campaign_player"].assert_called_once_with(campaign_id, player_email)
+
+    def test_deletes_character_record(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        leave_campaign(campaign_id, player_email)
+
+        cosmos_mocks["delete_character"].assert_called_once_with(campaign_id, player_email)
+
+    def test_display_name_falls_back_to_email_prefix(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        result = leave_campaign(campaign_id, player_email)
+
+        assert result["display_name"] == "adventurer"  # prefix of adventurer@example.com

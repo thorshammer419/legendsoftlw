@@ -155,6 +155,11 @@ async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.delete_campaign_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/leave", methods=["DELETE"])
+async def leave_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.leave_campaign_handler(req)
+
+
 @app.route(route="allowlist", methods=["GET"])
 async def get_allowed_users(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.get_allowed_users_handler(req)

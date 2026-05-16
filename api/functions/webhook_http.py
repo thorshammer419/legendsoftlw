@@ -27,7 +27,7 @@ from functions.activities.email import (
 )
 from functions.domain import (
     DomainError, submit_player_action, create_new_campaign, save_character,
-    join_campaign_as_observer,
+    join_campaign_as_observer, leave_campaign,
 )
 from helpers.queue import enqueue
 from helpers.llm import openai_client
@@ -609,9 +609,45 @@ async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
         return _error("Admin access required", 403)
 
+    all_players = get_campaign_players(campaign_id)
+    player_emails = [p["email"] for p in all_players]
+
     campaign["status"] = "deleted"
     update_campaign(campaign)
+
+    if player_emails:
+        broadcast_lobby_event({
+            "type": "campaign_deleted",
+            "campaign_id": campaign_id,
+            "player_emails": player_emails,
+        })
+
     return _json_response({"status": "deleted"})
+
+
+async def leave_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        result = leave_campaign(campaign_id, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
+
+    remaining = get_campaign_players(campaign_id)
+    remaining_emails = [p["email"] for p in remaining]
+    if remaining_emails:
+        broadcast_lobby_event({
+            "type": "player_left",
+            "campaign_id": campaign_id,
+            "email": result["email"],
+            "display_name": result["display_name"],
+            "player_emails": remaining_emails,
+        })
+
+    return _json_response({"status": "left"})
 
 
 # ---------------------------------------------------------------------------

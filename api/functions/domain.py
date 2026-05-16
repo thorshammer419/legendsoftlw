@@ -14,6 +14,7 @@ import bcrypt
 from functions.activities.cosmos import (
     get_campaign_player, get_campaign_players, get_story_state, upsert_story_state,
     upsert_character, upsert_campaign_player, upsert_player, get_player, create_campaign,
+    delete_campaign_player, delete_character,
 )
 
 
@@ -185,6 +186,28 @@ def save_character(campaign_id: str, email: str, body: dict) -> dict:
             "char_class": body.get("class", ""),
         }
     return {"first_completion": False}
+
+
+def leave_campaign(campaign_id: str, email: str) -> dict:
+    """
+    Remove a player from a campaign before it starts.
+
+    Deletes the campaign_player and character records.
+    Returns {"email": email, "display_name": ...} for the caller to broadcast.
+    Raises DomainError 403 if the caller is not a member or is the creator.
+    """
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp:
+        raise DomainError("You are not a member of this campaign", 403)
+    if cp.get("role") == "creator":
+        raise DomainError("Campaign creators cannot leave — cancel the campaign instead", 403)
+
+    delete_campaign_player(campaign_id, email)
+    delete_character(campaign_id, email)
+
+    player = get_player(email)
+    display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+    return {"email": email, "display_name": display_name}
 
 
 def join_campaign_as_observer(campaign_id: str, email: str) -> dict:

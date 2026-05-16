@@ -56,6 +56,8 @@ def cosmos_mocks():
         "upsert_player",
         "get_player",
         "create_campaign",
+        "delete_campaign_player",
+        "delete_character",
     ]
     patches = {name: patch(f"{COSMOS_MODULE}.{name}") for name in targets}
     mocks = {name: p.start() for name, p in patches.items()}

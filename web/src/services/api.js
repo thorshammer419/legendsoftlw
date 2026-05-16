@@ -70,6 +70,8 @@ export const api = {
     req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
   deleteCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}`, { method: 'DELETE' }),
+  leaveCampaign: (campaignId) =>
+    req(`/campaigns/${campaignId}/leave`, { method: 'DELETE' }),
 
   getAllowedUsers: () => req('/allowlist'),
   addAllowedUser: (email) =>

@@ -57,62 +57,57 @@ export default function ClassDiePicker({ onChange }) {
         {cls.name}
       </h2>
 
-      {/* Die + arrows row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+      {/* Die composite with overlaid arrows */}
+      <div
+        ref={dieRef}
+        style={{
+          position: 'relative',
+          width: 'min(320px, 88vw)',
+          height: 'min(320px, 88vw)',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {/* Class portrait behind frame */}
+        <img
+          src={cls.imagePath}
+          alt={cls.name}
+          style={{
+            position: 'absolute',
+            inset: '12%',
+            width: '76%',
+            height: '76%',
+            objectFit: 'cover',
+          }}
+        />
+        {/* Die frame on top */}
+        <img
+          src="/tlw_d20_frame.png"
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            pointerEvents: 'none',
+          }}
+        />
+        {/* Left arrow — overlaid on die edge */}
         <button
           aria-label="Previous class"
           onClick={() => advance(-1)}
           disabled={animating}
-          style={arrowStyle}
+          style={{ ...arrowStyle, position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)' }}
         >
           ‹
         </button>
-
-        {/* Die composite */}
-        <div
-          ref={dieRef}
-          style={{
-            position: 'relative',
-            width: 320,
-            height: 320,
-            flexShrink: 0,
-            transformStyle: 'preserve-3d',
-          }}
-        >
-          {/* Class portrait behind frame */}
-          <img
-            src={cls.imagePath}
-            alt={cls.name}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              borderRadius: '50%',
-            }}
-          />
-          {/* Die frame on top */}
-          <img
-            src="/tlw_d20_frame.png"
-            alt=""
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              pointerEvents: 'none',
-            }}
-          />
-        </div>
-
+        {/* Right arrow — overlaid on die edge */}
         <button
           aria-label="Next class"
           onClick={() => advance(1)}
           disabled={animating}
-          style={arrowStyle}
+          style={{ ...arrowStyle, position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)' }}
         >
           ›
         </button>
@@ -134,7 +129,7 @@ export default function ClassDiePicker({ onChange }) {
 }
 
 const arrowStyle = {
-  background: 'transparent',
+  background: 'rgba(0,0,0,0.5)',
   border: '1px solid var(--gold)',
   color: 'var(--gold)',
   fontSize: 36,
@@ -146,6 +141,6 @@ const arrowStyle = {
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
-  opacity: 1,
+  zIndex: 2,
   transition: 'opacity 0.15s',
 };

@@ -62,8 +62,8 @@ export default function ClassDiePicker({ onChange }) {
         ref={dieRef}
         style={{
           position: 'relative',
-          width: 'min(320px, 88vw)',
-          height: 'min(320px, 88vw)',
+          width: 'min(560px, 90vw)',
+          height: 'min(560px, 90vw)',
           transformStyle: 'preserve-3d',
         }}
       >
@@ -76,7 +76,7 @@ export default function ClassDiePicker({ onChange }) {
             inset: '12%',
             width: '76%',
             height: '76%',
-            objectFit: 'cover',
+            objectFit: 'contain',
           }}
         />
         {/* Die frame on top */}

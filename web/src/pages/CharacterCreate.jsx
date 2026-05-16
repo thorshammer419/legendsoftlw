@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import ClassDiePicker from '../components/character/ClassDiePicker';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -125,7 +126,20 @@ export default function CharacterCreate({ user }) {
   };
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
+    <div style={{
+      position: 'fixed', inset: 0,
+      overflowY: 'auto',
+      backgroundImage: 'url(/tlw_character_select.png)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }}>
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        pointerEvents: 'none',
+      }} />
+    <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         {step === 2 ? (
           <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Back</button>
@@ -137,8 +151,10 @@ export default function CharacterCreate({ user }) {
       </div>
 
       {step === 1 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
+          <ClassDiePicker onChange={(name) => setIdentity((i) => ({ ...i, class_name: name }))} />
+
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
             <h3 style={{ margin: 0, color: 'var(--gold)' }}>Identity</h3>
 
             <div>
@@ -151,19 +167,11 @@ export default function CharacterCreate({ user }) {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label className="label">Race</label>
-                <select value={identity.race} onChange={(e) => setIdentity((i) => ({ ...i, race: e.target.value }))}>
-                  {RACES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Class</label>
-                <select value={identity.class_name} onChange={(e) => setIdentity((i) => ({ ...i, class_name: e.target.value }))}>
-                  {CLASSES.map((c) => <option key={c.name} value={c.name}>{c.name} (d{c.hit_die})</option>)}
-                </select>
-              </div>
+            <div>
+              <label className="label">Race</label>
+              <select value={identity.race} onChange={(e) => setIdentity((i) => ({ ...i, race: e.target.value }))}>
+                {RACES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -283,6 +291,7 @@ export default function CharacterCreate({ user }) {
           </button>
         </div>
       )}
+    </div>
     </div>
   );
 }

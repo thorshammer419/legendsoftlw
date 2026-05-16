@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import MusicPlayer from './components/MusicPlayer';
 import Login from './pages/Login';
 import Unauthorized from './pages/Unauthorized';
 import Dashboard from './pages/Dashboard';
@@ -27,6 +28,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <MusicPlayer />
       <Routes>
         <Route path="/" element={<Dashboard user={user} />} />
         <Route path="/campaigns/new" element={<CreateCampaign />} />

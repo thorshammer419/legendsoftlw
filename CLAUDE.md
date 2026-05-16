@@ -56,6 +56,10 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Invite token regeneration: POST /campaigns/:id/admin/regenerate-invite generates new token (old link immediately invalid); Regenerate button in Admin.jsx and Lobby.jsx
 - [x] Dashboard rewritten: API-driven via GET /campaigns; splits into "My Campaigns" (is_member=true) and "Join a Campaign" (is_member=false); no more localStorage
 - [x] TDD: pytest-asyncio installed (asyncio_mode=auto was already set); 18 new tests covering domain.py (invite token, password hash) and handlers (list_campaigns_handler, join_campaign_handler); all tests pass
+- [x] Background images: Dashboard uses `tlw_campaign_bg.png`, Lobby uses `tlw_lobby_bg.png`; both use `position:fixed; inset:0; overflow-y:auto` wrapper with 55% black overlay, matching Login screen pattern
+- [x] Cinematic D20 class picker (CharacterCreate step 1): Shadowreaver die frame (`tlw_d20_frame.png`) composited over class portraits (`/class/{name}/{name}_create.png`); left/right arrows cycle all 12 classes with Y-axis flip animation (350ms, swap at 90° midpoint); class title above, SRD description below; `tlw_character_select.png` background; class `<select>` removed; step 2 (ability scores) unchanged. Class data in `src/data/classData.js`; component at `src/components/character/ClassDiePicker.jsx`. Note: paladin image is `.jpg`, sorcerer folder/file spells `sorceror`.
+- [x] Frontend test infrastructure: `src/setupTests.js` created to load `@testing-library/jest-dom`; 11 tests for classData module and ClassDiePicker (navigation, wrap-around, onChange, accessibility)
+- [x] Persistent background music (`MusicPlayer` component): plays `unconventional_wisdom.mp3` on all authenticated pre-game screens; song → 60s silence → song loop; pauses automatically on `/game/` routes, resumes on return; gold 🔊/🔇 mute toggle fixed top-right; muted state resets to playing each session. 5 tests covering mute toggle and loop timing.
 
 ## Immediate Next Steps
 - Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR

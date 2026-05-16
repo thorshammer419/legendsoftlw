@@ -79,20 +79,6 @@ export default function ClassDiePicker({ onChange }) {
             objectFit: 'contain',
           }}
         />
-        {/* Die frame on top */}
-        <img
-          src="/tlw_d20_frame.png"
-          alt=""
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            pointerEvents: 'none',
-          }}
-        />
         {/* Left arrow — overlaid on die edge */}
         <button
           aria-label="Previous class"

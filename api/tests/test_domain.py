@@ -277,6 +277,32 @@ class TestCreateNewCampaign:
 
         assert result["ability_score_method"] == "roll"
 
+    def test_ability_score_rules_defaults_to_standard_5e_values(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {})
+
+        rules = result["ability_score_rules"]
+        assert rules["standard_array"] == [15, 14, 13, 12, 10, 8]
+        assert rules["point_buy_points"] == 27
+        assert rules["roll_dice"] == 4
+        assert rules["roll_keep"] == 3
+
+    def test_ability_score_rules_stored_verbatim_when_provided(self, cosmos_mocks):
+        custom_rules = {
+            "standard_array": [16, 14, 13, 12, 10, 8],
+            "point_buy_points": 35,
+            "roll_dice": 5,
+            "roll_keep": 3,
+        }
+        result = create_new_campaign("dm@example.com", {"ability_score_rules": custom_rules})
+
+        assert result["ability_score_rules"] == custom_rules
+
+    def test_ability_score_rules_partial_override_stored_verbatim(self, cosmos_mocks):
+        partial_rules = {"point_buy_points": 40}
+        result = create_new_campaign("dm@example.com", {"ability_score_rules": partial_rules})
+
+        assert result["ability_score_rules"] == partial_rules
+
 
 # ---------------------------------------------------------------------------
 # save_character

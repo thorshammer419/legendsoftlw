@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import CreateCampaign from '../CreateCampaign';
@@ -157,5 +157,120 @@ describe('Generate button behavior', () => {
     expect(screen.getByRole('button', { name: /generate description/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /generate party name/i })).toBeDisabled();
     resolve({ value: 'done' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Standard Array sub-settings
+// ---------------------------------------------------------------------------
+
+describe('Standard Array sub-settings', () => {
+  test('inputs are not visible when Point Buy is selected', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /point buy/i }));
+    expect(screen.queryByLabelText(/array value 1/i)).not.toBeInTheDocument();
+  });
+
+  test('six inputs appear when Standard Array is selected', () => {
+    renderPage();
+    expect(screen.getByLabelText(/array value 1/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/array value 6/i)).toBeInTheDocument();
+  });
+
+  test('inputs are pre-populated with default array values', () => {
+    renderPage();
+    const defaults = [15, 14, 13, 12, 10, 8];
+    defaults.forEach((val, i) => {
+      expect(screen.getByLabelText(`Array value ${i + 1}`).value).toBe(String(val));
+    });
+  });
+
+  test('warning appears when a value is outside 3–18', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const first = screen.getByLabelText('Array value 1');
+    await user.clear(first);
+    await user.type(first, '20');
+    expect(screen.getByText('3–18')).toBeInTheDocument();
+  });
+
+  test('no warning when all values are within 3–18', () => {
+    renderPage();
+    expect(screen.queryByText('3–18')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Point Buy sub-settings
+// ---------------------------------------------------------------------------
+
+describe('Point Buy sub-settings', () => {
+  test('input is not visible when Standard Array is selected', () => {
+    renderPage();
+    expect(screen.queryByLabelText(/point buy budget/i)).not.toBeInTheDocument();
+  });
+
+  test('input appears when Point Buy is selected, pre-populated with 27', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /point buy/i }));
+    expect(screen.getByLabelText(/point buy budget/i).value).toBe('27');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Roll for Stats sub-settings
+// ---------------------------------------------------------------------------
+
+describe('Roll for Stats sub-settings', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    act(() => jest.runAllTimers());
+    jest.useRealTimers();
+  });
+
+  async function selectRoll() {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /roll for stats/i }));
+    return user;
+  }
+
+  test('inputs are not visible when Standard Array is selected', () => {
+    renderPage();
+    expect(screen.queryByLabelText(/dice to roll/i)).not.toBeInTheDocument();
+  });
+
+  test('inputs appear when Roll for Stats is selected, pre-populated with 4 and 3', async () => {
+    await selectRoll();
+    expect(screen.getByLabelText(/dice to roll/i).value).toBe('4');
+    expect(screen.getByLabelText(/dice to keep/i).value).toBe('3');
+  });
+
+  test('keep auto-adjusts to dice total when entered keep exceeds dice', async () => {
+    const user = await selectRoll();
+    const keepInput = screen.getByLabelText(/dice to keep/i);
+    await user.clear(keepInput);
+    await user.type(keepInput, '9');
+    expect(screen.getByLabelText(/dice to keep/i).value).toBe('4');
+  });
+
+  test('inline message appears when keep is auto-adjusted', async () => {
+    const user = await selectRoll();
+    const keepInput = screen.getByLabelText(/dice to keep/i);
+    await user.clear(keepInput);
+    await user.type(keepInput, '9');
+    expect(screen.getByText(/keep cannot exceed dice total/i)).toBeInTheDocument();
+  });
+
+  test('inline message disappears after 3 seconds', async () => {
+    const user = await selectRoll();
+    const keepInput = screen.getByLabelText(/dice to keep/i);
+    await user.clear(keepInput);
+    await user.type(keepInput, '9');
+    expect(screen.getByText(/keep cannot exceed dice total/i)).toBeInTheDocument();
+    act(() => jest.advanceTimersByTime(3000));
+    expect(screen.queryByText(/keep cannot exceed dice total/i)).not.toBeInTheDocument();
   });
 });

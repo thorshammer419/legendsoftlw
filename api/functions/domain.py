@@ -96,6 +96,12 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
         "password_hash": password_hash,
         "max_players": body.get("max_players", 8),
         "ability_score_method": body.get("ability_score_method", "standard_array"),
+        "ability_score_rules": body.get("ability_score_rules", {
+            "standard_array": [15, 14, 13, 12, 10, 8],
+            "point_buy_points": 27,
+            "roll_dice": 4,
+            "roll_keep": 3,
+        }),
         "schedule": schedule,
         "inactivity_thresholds": {"combat_encounters": 2, "scenes": 4},
         "legend": {"previous_campaign_id": None, "summary": None, "key_events": []},

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
@@ -24,6 +24,12 @@ const DEFAULTS = {
   password: '',
   max_players: 8,
   ability_score_method: 'standard_array',
+  ability_score_rules: {
+    standard_array: [15, 14, 13, 12, 10, 8],
+    point_buy_points: 27,
+    roll_dice: 4,
+    roll_keep: 3,
+  },
   schedule: {
     timezone: 'America/Chicago',
     active_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -34,6 +40,128 @@ const DEFAULTS = {
     blackout_dates: [],
   },
 };
+
+const SUBSETTING_STYLE = {
+  marginTop: 8,
+  padding: '12px 14px',
+  background: 'rgba(255,255,255,0.04)',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+};
+
+function StandardArraySettings({ rules, setRules }) {
+  const arr = rules.standard_array;
+  return (
+    <div style={SUBSETTING_STYLE}>
+      <label className="label" style={{ margin: 0 }}>Array Values</label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {arr.map((val, i) => {
+          const outOfRange = val < 3 || val > 18;
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <input
+                type="number"
+                value={val}
+                onChange={(e) => {
+                  const next = [...arr];
+                  next[i] = Number(e.target.value) || 0;
+                  setRules('standard_array', next);
+                }}
+                style={{ width: 48, textAlign: 'center' }}
+                aria-label={`Array value ${i + 1}`}
+              />
+              {outOfRange && (
+                <span style={{ fontSize: 10, color: 'var(--danger)' }}>3–18</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PointBuySettings({ rules, setRules }) {
+  return (
+    <div style={SUBSETTING_STYLE}>
+      <label className="label" style={{ margin: 0 }}>Point Budget</label>
+      <input
+        type="number"
+        min={1}
+        max={72}
+        value={rules.point_buy_points}
+        onChange={(e) => setRules('point_buy_points', Math.min(72, Math.max(1, Number(e.target.value) || 1)))}
+        style={{ width: 80 }}
+        aria-label="Point buy budget"
+      />
+    </div>
+  );
+}
+
+function RollSettings({ rules, setRules }) {
+  const [keepMsg, setKeepMsg] = useState(false);
+  const timerRef = useRef(null);
+
+  const setDice = (val) => {
+    const dice = Math.max(1, Number(val) || 1);
+    setRules('roll_dice', dice);
+    if (rules.roll_keep > dice) {
+      setRules('roll_keep', dice);
+      clearTimeout(timerRef.current);
+      setKeepMsg(true);
+      timerRef.current = setTimeout(() => setKeepMsg(false), 3000);
+    }
+  };
+
+  const setKeep = (val) => {
+    const keep = Math.max(1, Number(val) || 1);
+    if (keep > rules.roll_dice) {
+      setRules('roll_keep', rules.roll_dice);
+      clearTimeout(timerRef.current);
+      setKeepMsg(true);
+      timerRef.current = setTimeout(() => setKeepMsg(false), 3000);
+    } else {
+      setRules('roll_keep', keep);
+    }
+  };
+
+  return (
+    <div style={SUBSETTING_STYLE}>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <div>
+          <label className="label" style={{ margin: '0 0 4px' }}>Dice to Roll</label>
+          <input
+            type="number"
+            min={1}
+            value={rules.roll_dice}
+            onChange={(e) => setDice(e.target.value)}
+            style={{ width: 64 }}
+            aria-label="Dice to roll"
+          />
+        </div>
+        <div>
+          <label className="label" style={{ margin: '0 0 4px' }}>Dice to Keep</label>
+          <input
+            type="number"
+            min={1}
+            value={rules.roll_keep}
+            onChange={(e) => setKeep(e.target.value)}
+            style={{ width: 64 }}
+            aria-label="Dice to keep"
+          />
+          {keepMsg && (
+            <p style={{ fontSize: 11, color: 'var(--danger)', margin: '4px 0 0' }}>
+              Keep cannot exceed dice total
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function GenerateButton({ field, generating, onGenerate }) {
   const isActive = generating === field;
@@ -73,6 +201,9 @@ export default function CreateCampaign() {
   const setSchedule = (key, value) =>
     setForm((f) => ({ ...f, schedule: { ...f.schedule, [key]: value } }));
 
+  const setRules = (key, value) =>
+    setForm((f) => ({ ...f, ability_score_rules: { ...f.ability_score_rules, [key]: value } }));
+
   const handleGenerate = async (field) => {
     setGenerating(field);
     try {
@@ -109,7 +240,8 @@ export default function CreateCampaign() {
   };
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
         <h1 style={{ margin: 0 }}>New Campaign</h1>
@@ -203,16 +335,27 @@ export default function CreateCampaign() {
             <label className="label">Ability Score Method</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
               {ABILITY_SCORE_METHODS.map((method) => (
-                <button
-                  key={method.value}
-                  type="button"
-                  className={`btn btn-sm ${form.ability_score_method === method.value ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setForm((f) => ({ ...f, ability_score_method: method.value }))}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '10px 14px', textAlign: 'left' }}
-                >
-                  <span style={{ fontWeight: 600 }}>{method.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 2 }}>{method.description}</span>
-                </button>
+                <div key={method.value}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${form.ability_score_method === method.value ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setForm((f) => ({ ...f, ability_score_method: method.value }))}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '10px 14px', textAlign: 'left', width: '100%' }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{method.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 2 }}>{method.description}</span>
+                  </button>
+
+                  {form.ability_score_method === 'standard_array' && method.value === 'standard_array' && (
+                    <StandardArraySettings rules={form.ability_score_rules} setRules={setRules} />
+                  )}
+                  {form.ability_score_method === 'point_buy' && method.value === 'point_buy' && (
+                    <PointBuySettings rules={form.ability_score_rules} setRules={setRules} />
+                  )}
+                  {form.ability_score_method === 'roll' && method.value === 'roll' && (
+                    <RollSettings rules={form.ability_score_rules} setRules={setRules} />
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -309,6 +452,7 @@ export default function CreateCampaign() {
           {saving ? 'Creating...' : 'Create Campaign →'}
         </button>
       </form>
+    </div>
     </div>
   );
 }

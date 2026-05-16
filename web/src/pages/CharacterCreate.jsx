@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
@@ -65,6 +65,7 @@ export default function CharacterCreate({ user }) {
   const [step, setStep] = useState(1); // 1 = identity, 2 = ability scores
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [maxLevel, setMaxLevel] = useState(null); // null = loading
 
   const [identity, setIdentity] = useState({
     name: '',
@@ -78,10 +79,20 @@ export default function CharacterCreate({ user }) {
 
   const [scores, setScores] = useState(INITIAL_SCORES);
 
+  useEffect(() => {
+    api.getCampaign(campaignId)
+      .then((c) => {
+        const max = c.max_starting_level ?? 20;
+        setMaxLevel(max);
+        setIdentity((i) => ({ ...i, level: max }));
+      })
+      .catch(() => setMaxLevel(20));
+  }, [campaignId]);
+
   const selectedClass = CLASSES.find((c) => c.name === identity.class_name) || CLASSES[0];
   const conMod = mod(scores.constitution);
   const dexMod = mod(scores.dexterity);
-  const level = Math.max(1, Math.min(20, identity.level));
+  const level = Math.max(1, Math.min(maxLevel ?? 20, identity.level));
   const maxHp = selectedClass.hit_die + conMod;
   const baseAC = 10 + dexMod;
   const speed = RACE_SPEED[identity.race] ?? 30;
@@ -150,7 +161,13 @@ export default function CharacterCreate({ user }) {
         <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
       </div>
 
-      {step === 1 && (
+      {step === 1 && maxLevel === null && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <div className="spinner" />
+        </div>
+      )}
+
+      {step === 1 && maxLevel !== null && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
           <ClassDiePicker onChange={(name) => setIdentity((i) => ({ ...i, class_name: name }))} />
 
@@ -190,15 +207,17 @@ export default function CharacterCreate({ user }) {
             </div>
 
             <div>
-              <label className="label">Starting Level</label>
-              <input
-                type="number"
-                min={1}
-                max={20}
+              <label className="label" htmlFor="starting_level">Starting Level</label>
+              <select
+                id="starting_level"
                 value={identity.level}
                 onChange={(e) => setIdentity((i) => ({ ...i, level: Number(e.target.value) }))}
-                style={{ width: 100 }}
-              />
+                style={{ width: 120 }}
+              >
+                {Array.from({ length: maxLevel }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>Level {n}</option>
+                ))}
+              </select>
             </div>
 
             <div>

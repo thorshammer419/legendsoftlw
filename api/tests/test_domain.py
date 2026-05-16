@@ -303,6 +303,16 @@ class TestCreateNewCampaign:
 
         assert result["ability_score_rules"] == partial_rules
 
+    def test_max_starting_level_defaults_to_1(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {})
+
+        assert result["max_starting_level"] == 1
+
+    def test_max_starting_level_stored_when_provided(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {"max_starting_level": 5})
+
+        assert result["max_starting_level"] == 5
+
 
 # ---------------------------------------------------------------------------
 # save_character

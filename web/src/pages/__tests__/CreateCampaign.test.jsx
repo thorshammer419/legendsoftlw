@@ -274,3 +274,26 @@ describe('Roll for Stats sub-settings', () => {
     expect(screen.queryByText(/keep cannot exceed dice total/i)).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Max Starting Level
+// ---------------------------------------------------------------------------
+
+describe('Max Starting Level', () => {
+  test('select is present with label', () => {
+    renderPage();
+    expect(screen.getByLabelText(/max starting level/i)).toBeInTheDocument();
+  });
+
+  test('defaults to Level 1', () => {
+    renderPage();
+    expect(screen.getByLabelText(/max starting level/i).value).toBe('1');
+  });
+
+  test('offers options 1 through 20', () => {
+    renderPage();
+    const select = screen.getByLabelText(/max starting level/i);
+    const values = Array.from(select.options).map((o) => Number(o.value));
+    expect(values).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+  });
+});

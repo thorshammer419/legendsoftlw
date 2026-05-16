@@ -95,6 +95,7 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
         "invite_token": invite_token,
         "password_hash": password_hash,
         "max_players": body.get("max_players", 8),
+        "max_starting_level": body.get("max_starting_level", 1),
         "ability_score_method": body.get("ability_score_method", "standard_array"),
         "ability_score_rules": body.get("ability_score_rules", {
             "standard_array": [15, 14, 13, 12, 10, 8],

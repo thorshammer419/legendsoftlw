@@ -23,6 +23,7 @@ const DEFAULTS = {
   description: '',
   password: '',
   max_players: 8,
+  max_starting_level: 1,
   ability_score_method: 'standard_array',
   ability_score_rules: {
     standard_array: [15, 14, 13, 12, 10, 8],
@@ -323,6 +324,19 @@ export default function CreateCampaign() {
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <option key={n} value={n}>{n} players</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="max_starting_level">Max Starting Level</label>
+            <select
+              id="max_starting_level"
+              value={form.max_starting_level}
+              onChange={(e) => setForm((f) => ({ ...f, max_starting_level: Number(e.target.value) }))}
+            >
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>Level {n}</option>
               ))}
             </select>
           </div>

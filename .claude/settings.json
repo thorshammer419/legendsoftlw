@@ -3,7 +3,14 @@
     "allow": [
       "Bash(unzip -p workflow_logs3.zip \"0_deploy.txt\")",
       "Bash(unzip -l workflow_logs3.zip)",
-      "Bash(DEPLOYMENT_TOKEN=c171db40e67bcd6168c7203ceeea4eb523d75db79e4501aa78935da104e835d307-844d5ec7-771b-4339-9ad0-3942073d806b0101628080fad410 DEPLOYMENT_ACTION=upload DEPLOYMENT_PROVIDER=SwaCli DEPLOYMENT_ENVIRONMENT=production SKIP_APP_BUILD=true REPOSITORY_BASE=/workspaces/legendsoftlw/web/build /home/codespace/.swa/deploy/08e29138cd3dcda4ffda6d587aa580028110c1c7/StaticSitesClient)"
+      "Bash(DEPLOYMENT_TOKEN=c171db40e67bcd6168c7203ceeea4eb523d75db79e4501aa78935da104e835d307-844d5ec7-771b-4339-9ad0-3942073d806b0101628080fad410 DEPLOYMENT_ACTION=upload DEPLOYMENT_PROVIDER=SwaCli DEPLOYMENT_ENVIRONMENT=production SKIP_APP_BUILD=true REPOSITORY_BASE=/workspaces/legendsoftlw/web/build /home/codespace/.swa/deploy/08e29138cd3dcda4ffda6d587aa580028110c1c7/StaticSitesClient)",
+      "Bash(git commit -m ' *)",
+      "Bash(git -C /workspaces/legendsoftlw add web/src/components/character/ClassDiePicker.jsx)",
+      "Bash(git -C /workspaces/legendsoftlw commit -m ' *)",
+      "Bash(git -C /workspaces/legendsoftlw push)",
+      "Bash(git -C /workspaces/legendsoftlw add web/src/components/MusicPlayer.jsx web/src/App.jsx web/src/pages/Dashboard.jsx web/src/pages/Lobby.jsx web/src/pages/CharacterCreate.jsx web/src/components/__tests__/MusicPlayer.test.jsx)",
+      "Bash(git -C /workspaces/legendsoftlw log --oneline -6)",
+      "Bash(.venv/bin/pytest tests/test_domain.py -v --tb=short)"
     ]
   }
 }

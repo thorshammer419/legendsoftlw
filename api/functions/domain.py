@@ -95,6 +95,7 @@ def create_new_campaign(creator_email: str, body: dict) -> dict:
         "invite_token": invite_token,
         "password_hash": password_hash,
         "max_players": body.get("max_players", 8),
+        "ability_score_method": body.get("ability_score_method", "standard_array"),
         "schedule": schedule,
         "inactivity_thresholds": {"combat_encounters": 2, "scenes": 4},
         "legend": {"previous_campaign_id": None, "summary": None, "key_events": []},

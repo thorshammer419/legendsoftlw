@@ -30,6 +30,7 @@ from functions.domain import (
     join_campaign_as_observer,
 )
 from helpers.queue import enqueue
+from helpers.llm import openai_client
 
 
 def _json_response(data, status_code=200):
@@ -721,3 +722,79 @@ async def update_push_subscription(req: func.HttpRequest) -> func.HttpResponse:
     player["notifications"]["push_subscription"] = body.get("subscription")
     upsert_player(player)
     return _json_response({"status": "saved"})
+
+
+_GENERATE_PROMPTS = {
+    "name": (
+        "You are a creative D&D 5e Dungeon Master. Generate a single evocative campaign name "
+        "for a fantasy adventure. Return only the campaign name, nothing else. "
+        "It should be dramatic, memorable, and 2–6 words long."
+    ),
+    "party_name": (
+        "You are a creative D&D 5e Dungeon Master. Generate a single memorable party name "
+        "for a group of adventurers. Return only the party name, nothing else. "
+        "It should be bold, thematic, and 2–5 words long."
+    ),
+    "description": (
+        "You are a creative D&D 5e Dungeon Master. Write a short campaign description "
+        "of 2–4 sentences that sets the scene and hooks the players. "
+        "Return only the description, nothing else."
+    ),
+}
+
+VALID_GENERATE_FIELDS = set(_GENERATE_PROMPTS.keys())
+
+
+async def generate_campaign_field_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    field = body.get("field", "")
+    if field not in VALID_GENERATE_FIELDS:
+        return _error(f"Unknown field '{field}'. Must be one of: {', '.join(sorted(VALID_GENERATE_FIELDS))}")
+
+    context = body.get("context", {})
+    ctx_name = (context.get("name") or "").strip()
+    ctx_description = (context.get("description") or "").strip()
+
+    system_prompt = _GENERATE_PROMPTS[field]
+    user_parts = []
+    if field == "name" and ctx_description:
+        user_parts.append(f"Campaign description: {ctx_description}")
+        user_parts.append("Generate a fitting campaign name.")
+    elif field == "description" and ctx_name:
+        user_parts.append(f"Campaign name: {ctx_name}")
+        user_parts.append("Generate an evocative campaign description.")
+    elif field == "party_name":
+        if ctx_name:
+            user_parts.append(f"Campaign name: {ctx_name}")
+        if ctx_description:
+            user_parts.append(f"Campaign description: {ctx_description}")
+        user_parts.append("Generate a fitting party name.")
+    else:
+        user_parts.append(f"Generate a {field.replace('_', ' ')}.")
+
+    user_message = "\n".join(user_parts)
+
+    try:
+        client = openai_client()
+        response = client.chat.completions.create(
+            model=os.environ["OPENAI_MINI_DEPLOYMENT"],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=150,
+            temperature=0.9,
+        )
+        value = response.choices[0].message.content.strip()
+    except Exception as e:
+        return _error(f"Generation failed: {e}", 500)
+
+    return _json_response({"value": value})

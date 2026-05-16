@@ -262,6 +262,21 @@ class TestCreateNewCampaign:
 
         assert bcrypt.checkpw(b"secret123", result["password_hash"].encode())
 
+    def test_ability_score_method_defaults_to_standard_array(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {})
+
+        assert result["ability_score_method"] == "standard_array"
+
+    def test_ability_score_method_point_buy_is_stored(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {"ability_score_method": "point_buy"})
+
+        assert result["ability_score_method"] == "point_buy"
+
+    def test_ability_score_method_roll_is_stored(self, cosmos_mocks):
+        result = create_new_campaign("dm@example.com", {"ability_score_method": "roll"})
+
+        assert result["ability_score_method"] == "roll"
+
 
 # ---------------------------------------------------------------------------
 # save_character

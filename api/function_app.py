@@ -65,6 +65,11 @@ async def create_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.create_campaign_handler(req)
 
 
+@app.route(route="campaigns/generate-field", methods=["POST"])
+async def generate_campaign_field_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.generate_campaign_field_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}/join", methods=["POST"])
 async def join_campaign_route(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.join_campaign_handler(req)

@@ -22,6 +22,8 @@ export const api = {
   listAllCampaigns: () => req('/campaigns'),
   resolveInviteToken: (token) => req(`/campaigns/invite/${token}`),
   createCampaign: (data) => req('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  generateCampaignField: (field, context) =>
+    req('/campaigns/generate-field', { method: 'POST', body: JSON.stringify({ field, context }) }),
   getCampaign: (id) => req(`/campaigns/${id}`),
   joinCampaign: (campaignId, opts = {}) =>
     req(`/campaigns/${campaignId}/join`, { method: 'POST', body: JSON.stringify(opts) }),

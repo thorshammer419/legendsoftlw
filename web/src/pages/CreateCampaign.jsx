@@ -11,12 +11,19 @@ const TIMEZONES = [
   'Asia/Tokyo', 'Asia/Seoul', 'Australia/Sydney',
 ];
 
+const ABILITY_SCORE_METHODS = [
+  { value: 'standard_array', label: 'Standard Array', description: 'Assign the fixed values 15, 14, 13, 12, 10, 8' },
+  { value: 'point_buy', label: 'Point Buy', description: 'Spend 27 points; scores range 8–15' },
+  { value: 'roll', label: 'Roll for Stats', description: 'Roll 4d6 drop lowest for each score' },
+];
+
 const DEFAULTS = {
   name: '',
   party_name: '',
   description: '',
   password: '',
   max_players: 8,
+  ability_score_method: 'standard_array',
   schedule: {
     timezone: 'America/Chicago',
     active_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -28,14 +35,58 @@ const DEFAULTS = {
   },
 };
 
+function GenerateButton({ field, generating, onGenerate }) {
+  const isActive = generating === field;
+  const isDisabled = generating !== null;
+  return (
+    <button
+      type="button"
+      onClick={() => onGenerate(field)}
+      disabled={isDisabled}
+      aria-label={`Generate ${field.replace('_', ' ')} with AI`}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: isDisabled ? 'not-allowed' : 'pointer',
+        padding: '2px 4px',
+        opacity: isDisabled && !isActive ? 0.4 : 1,
+        display: 'flex',
+        alignItems: 'center',
+      }}
+    >
+      {isActive ? (
+        <span style={{ fontSize: 13, color: 'var(--gold)' }}>...</span>
+      ) : (
+        <img src="/tlw_d20_roll.png" alt="" width={20} height={20} style={{ display: 'block' }} />
+      )}
+    </button>
+  );
+}
+
 export default function CreateCampaign() {
   const navigate = useNavigate();
   const [form, setForm] = useState(DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [generating, setGenerating] = useState(null);
 
   const setSchedule = (key, value) =>
     setForm((f) => ({ ...f, schedule: { ...f.schedule, [key]: value } }));
+
+  const handleGenerate = async (field) => {
+    setGenerating(field);
+    try {
+      const context = {};
+      if (form.name.trim()) context.name = form.name.trim();
+      if (form.description.trim()) context.description = form.description.trim();
+      const { value } = await api.generateCampaignField(field, context);
+      setForm((f) => ({ ...f, [field]: value }));
+    } catch (err) {
+      console.error('Generation failed:', err);
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const toggleDay = (day) => {
     const days = form.schedule.active_days;
@@ -58,7 +109,7 @@ export default function CreateCampaign() {
   };
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24, overflowY: 'auto', height: '100%' }}>
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
         <h1 style={{ margin: 0 }}>New Campaign</h1>
@@ -77,7 +128,10 @@ export default function CreateCampaign() {
           <h3 style={{ margin: 0, color: 'var(--gold)' }}>Campaign Details</h3>
 
           <div>
-            <label className="label" htmlFor="name">Campaign Name *</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label className="label" htmlFor="name" style={{ margin: 0 }}>Campaign Name *</label>
+              <GenerateButton field="name" generating={generating} onGenerate={handleGenerate} />
+            </div>
             <input
               id="name"
               type="text"
@@ -89,7 +143,10 @@ export default function CreateCampaign() {
           </div>
 
           <div>
-            <label className="label" htmlFor="party_name">Party Name</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label className="label" htmlFor="party_name" style={{ margin: 0 }}>Party Name</label>
+              <GenerateButton field="party_name" generating={generating} onGenerate={handleGenerate} />
+            </div>
             <input
               id="party_name"
               type="text"
@@ -100,7 +157,10 @@ export default function CreateCampaign() {
           </div>
 
           <div>
-            <label className="label" htmlFor="desc">Description</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label className="label" htmlFor="desc" style={{ margin: 0 }}>Description</label>
+              <GenerateButton field="description" generating={generating} onGenerate={handleGenerate} />
+            </div>
             <textarea
               id="desc"
               value={form.description}
@@ -129,10 +189,32 @@ export default function CreateCampaign() {
               value={form.max_players}
               onChange={(e) => setForm((f) => ({ ...f, max_players: Number(e.target.value) }))}
             >
-              {[2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                 <option key={n} value={n}>{n} players</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Character Rules */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <h3 style={{ margin: 0, color: 'var(--gold)' }}>Character Rules</h3>
+          <div>
+            <label className="label">Ability Score Method</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+              {ABILITY_SCORE_METHODS.map((method) => (
+                <button
+                  key={method.value}
+                  type="button"
+                  className={`btn btn-sm ${form.ability_score_method === method.value ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setForm((f) => ({ ...f, ability_score_method: method.value }))}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '10px 14px', textAlign: 'left' }}
+                >
+                  <span style={{ fontWeight: 600 }}>{method.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 2 }}>{method.description}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

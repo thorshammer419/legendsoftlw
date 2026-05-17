@@ -35,7 +35,7 @@ export default function Lobby({ user, isAdmin }) {
   const navigate = useNavigate();
   const { setCenterContent } = useNavbar();
 
-  const { campaign, players, storyState, loading, refresh } = useCampaign(campaignId);
+  const { campaign, players, loading, refresh } = useCampaign(campaignId);
   const [messages, setMessages] = useState([]);
   const seenIds = useRef(new Set());
   const [input, setInput] = useState('');

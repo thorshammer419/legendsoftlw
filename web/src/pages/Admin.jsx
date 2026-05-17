@@ -168,7 +168,8 @@ export default function Admin({ user, isAdmin }) {
     : null;
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
+    <div style={{ maxWidth: 600, margin: '0 auto', padding: '84px 24px 24px' }}>
 
       {notification && (
         <div style={{
@@ -410,6 +411,7 @@ export default function Admin({ user, isAdmin }) {
         </div>
 
       </div>
+    </div>
     </div>
   );
 }

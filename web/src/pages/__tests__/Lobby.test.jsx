@@ -91,17 +91,17 @@ beforeEach(() => {
 describe('Cancel/Leave button visibility', () => {
   test('non-creator sees "Leave Campaign" button', () => {
     renderAsPlayer();
-    expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument();
   });
 
   test('creator sees "Cancel Campaign" button', () => {
     renderAsCreator();
-    expect(screen.getByRole('button', { name: /cancel campaign/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
   });
 
   test('creator does not see "Leave Campaign" button', () => {
     renderAsCreator();
-    expect(screen.queryByRole('button', { name: /leave campaign/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^leave$/i })).not.toBeInTheDocument();
   });
 });
 
@@ -113,21 +113,21 @@ describe('Confirmation modal', () => {
   test('clicking Leave button shows confirmation modal', async () => {
     const user = userEvent.setup();
     renderAsPlayer();
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     expect(screen.getByText(/leave campaign\?/i)).toBeInTheDocument();
   });
 
   test('clicking Cancel button shows confirmation modal', async () => {
     const user = userEvent.setup();
     renderAsCreator();
-    await user.click(screen.getByRole('button', { name: /cancel campaign/i }));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
     expect(screen.getByText(/cancel campaign\?/i)).toBeInTheDocument();
   });
 
   test('"Keep Playing" dismisses modal without calling API', async () => {
     const user = userEvent.setup();
     renderAsPlayer();
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     await user.click(screen.getByRole('button', { name: /keep playing/i }));
     expect(screen.queryByText(/leave campaign\?/i)).not.toBeInTheDocument();
     expect(api.leaveCampaign).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('Confirmation modal', () => {
     api.leaveCampaign.mockResolvedValue({});
     const user = userEvent.setup();
     renderAsPlayer();
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     await user.click(screen.getByRole('button', { name: /yes, leave campaign/i }));
     await waitFor(() => expect(api.leaveCampaign).toHaveBeenCalledWith('test-campaign'));
     expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
@@ -147,7 +147,7 @@ describe('Confirmation modal', () => {
     api.deleteCampaign.mockResolvedValue({});
     const user = userEvent.setup();
     renderAsCreator();
-    await user.click(screen.getByRole('button', { name: /cancel campaign/i }));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
     await user.click(screen.getByRole('button', { name: /yes, cancel campaign/i }));
     await waitFor(() => expect(api.deleteCampaign).toHaveBeenCalledWith('test-campaign'));
     expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });

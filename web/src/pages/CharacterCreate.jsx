@@ -103,14 +103,14 @@ export default function CharacterCreate({ user }) {
     const totalSteps = iAmCreator ? 3 : 2;
     const currentStep = iAmCreator ? 2 : 1;
     setCenterContent(
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {currentStep} of {totalSteps}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Step {currentStep} of {totalSteps}</span>
         <button
           className="btn btn-sm"
-          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent', fontSize: 11, padding: '2px 6px', whiteSpace: 'nowrap' }}
           onClick={() => setConfirmAction(iAmCreator ? 'cancel' : 'leave')}
         >
-          {iAmCreator ? 'Cancel Campaign' : 'Leave Campaign'}
+          {iAmCreator ? 'Cancel' : 'Leave'}
         </button>
       </div>
     );
@@ -203,7 +203,7 @@ export default function CharacterCreate({ user }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-      <h1 style={{ textAlign: 'center', padding: '84px 24px 28px', margin: 0 }}>Create Character</h1>
+      <h1 style={{ position: 'relative', textAlign: 'center', padding: '84px 24px 28px', margin: 0 }}>Create Character</h1>
     <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '0 24px 24px' }}>
 
       {step === 1 && maxLevel === null && (

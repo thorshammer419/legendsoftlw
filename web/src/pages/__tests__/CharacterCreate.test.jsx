@@ -178,27 +178,27 @@ describe('Cancel/Leave Campaign button', () => {
 
   test('non-creator sees "Leave Campaign" button after load', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument());
   });
 
   test('creator sees "Cancel Campaign" button after load', async () => {
     renderPageAsCreator();
-    await waitFor(() => expect(screen.getByRole('button', { name: /cancel campaign/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument());
   });
 
   test('clicking Leave button shows confirmation modal', async () => {
     const user = userEvent.setup();
     renderPage();
-    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     expect(screen.getByText(/leave campaign\?/i)).toBeInTheDocument();
   });
 
   test('"Keep Playing" dismisses the modal', async () => {
     const user = userEvent.setup();
     renderPage();
-    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     await user.click(screen.getByRole('button', { name: /keep playing/i }));
     expect(screen.queryByText(/leave campaign\?/i)).not.toBeInTheDocument();
   });
@@ -207,8 +207,8 @@ describe('Cancel/Leave Campaign button', () => {
     api.leaveCampaign.mockResolvedValue({});
     const user = userEvent.setup();
     renderPage();
-    await waitFor(() => expect(screen.getByRole('button', { name: /leave campaign/i })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /leave campaign/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
     await user.click(screen.getByRole('button', { name: /yes, leave campaign/i }));
     await waitFor(() => expect(api.leaveCampaign).toHaveBeenCalledWith('test-campaign'));
     expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });

@@ -125,14 +125,14 @@ export default function Lobby({ user, isAdmin }) {
     const totalSteps = iAmAdmin ? 3 : 2;
     const currentStep = iAmAdmin ? 3 : 2;
     setCenterContent(
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {currentStep} of {totalSteps}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Step {currentStep} of {totalSteps}</span>
         <button
           className="btn btn-sm"
-          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent', fontSize: 11, padding: '2px 6px', whiteSpace: 'nowrap' }}
           onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
         >
-          {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
+          {iAmAdmin ? 'Cancel' : 'Leave'}
         </button>
       </div>
     );
@@ -156,7 +156,7 @@ export default function Lobby({ user, isAdmin }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-      <div style={{ textAlign: 'center', padding: '84px 24px 0' }}>
+      <div style={{ position: 'relative', textAlign: 'center', padding: '84px 24px 0' }}>
         <h1 style={{ margin: '0 0 4px' }}>{campaign?.name}</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
           {campaign?.party_name} · Waiting for adventurers to gather

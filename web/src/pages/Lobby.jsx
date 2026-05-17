@@ -122,14 +122,19 @@ export default function Lobby({ user, isAdmin }) {
   const iAmAdmin = isAdmin ? isAdmin(campaign) : creatorEmails.includes(myEmail);
 
   useEffect(() => {
+    const totalSteps = iAmAdmin ? 3 : 2;
+    const currentStep = iAmAdmin ? 3 : 2;
     setCenterContent(
-      <button
-        className="btn btn-sm"
-        style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
-        onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
-      >
-        {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {currentStep} of {totalSteps}</span>
+        <button
+          className="btn btn-sm"
+          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+          onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
+        >
+          {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
+        </button>
+      </div>
     );
     return () => setCenterContent(null);
   }, [iAmAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,15 +156,13 @@ export default function Lobby({ user, isAdmin }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '48px 24px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* Header */}
-      <div>
-        <h1 style={{ marginBottom: 4 }}>{campaign?.name}</h1>
+      <div style={{ textAlign: 'center', padding: '84px 24px 0' }}>
+        <h1 style={{ margin: '0 0 4px' }}>{campaign?.name}</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
           {campaign?.party_name} · Waiting for adventurers to gather
         </p>
       </div>
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '24px 24px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Party roster */}
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -100,12 +100,11 @@ export default function CharacterCreate({ user }) {
   const iAmCreator = creatorEmails.includes(myEmail);
 
   useEffect(() => {
+    const totalSteps = iAmCreator ? 3 : 2;
+    const currentStep = iAmCreator ? 2 : 1;
     setCenterContent(
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {step === 2 && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Back</button>
-        )}
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {currentStep} of {totalSteps}</span>
         <button
           className="btn btn-sm"
           style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
@@ -116,7 +115,7 @@ export default function CharacterCreate({ user }) {
       </div>
     );
     return () => setCenterContent(null);
-  }, [step, iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useSignalR(campaignId, {
     onLobbyEvent: (event) => {
@@ -204,8 +203,8 @@ export default function CharacterCreate({ user }) {
         background: 'rgba(0,0,0,0.55)',
         pointerEvents: 'none',
       }} />
-    <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
-      <h1 style={{ marginBottom: 28 }}>Create Character</h1>
+      <h1 style={{ textAlign: 'center', padding: '84px 24px 28px', margin: 0 }}>Create Character</h1>
+    <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '0 24px 24px' }}>
 
       {step === 1 && maxLevel === null && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>

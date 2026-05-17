@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import CreateCampaign from '../CreateCampaign';
 import { api } from '../../services/api';
+import { NavbarProvider } from '../../context/NavbarContext';
 
 jest.mock('../../services/api', () => ({
   api: {
@@ -18,9 +19,11 @@ jest.mock('react-router-dom', () => ({
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <CreateCampaign />
-    </MemoryRouter>
+    <NavbarProvider>
+      <MemoryRouter>
+        <CreateCampaign />
+      </MemoryRouter>
+    </NavbarProvider>
   );
 }
 

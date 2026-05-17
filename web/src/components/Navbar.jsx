@@ -23,14 +23,11 @@ export default function Navbar({ muted, onToggleMute }) {
       display: 'flex',
       alignItems: 'center',
       padding: '0 16px',
-      gap: 12,
     }}>
       {/* Left slot */}
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
         {isHome ? (
-          <span style={{ fontFamily: 'var(--font-display, serif)', color: 'var(--gold)', fontWeight: 700, fontSize: 15, letterSpacing: '0.03em' }}>
-            The Legends of TLW
-          </span>
+          <img src="/tlw_logo.jpg" alt="The Legends of TLW" style={{ height: 36, width: 'auto' }} />
         ) : (
           <button
             aria-label="Go back"
@@ -48,7 +45,7 @@ export default function Navbar({ muted, onToggleMute }) {
       </div>
 
       {/* Right slot — mute toggle */}
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
         <button
           aria-label={muted ? 'Unmute music' : 'Mute music'}
           onClick={onToggleMute}

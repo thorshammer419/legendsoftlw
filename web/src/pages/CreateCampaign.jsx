@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { useNavbar } from '../context/NavbarContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -194,10 +195,18 @@ function GenerateButton({ field, generating, onGenerate }) {
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
+  const { setCenterContent } = useNavbar();
   const [form, setForm] = useState(DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(null);
+
+  useEffect(() => {
+    setCenterContent(
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step 1 of 3</span>
+    );
+    return () => setCenterContent(null);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setSchedule = (key, value) =>
     setForm((f) => ({ ...f, schedule: { ...f.schedule, [key]: value } }));
@@ -242,8 +251,8 @@ export default function CreateCampaign() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
-      <h1 style={{ marginBottom: 28 }}>New Campaign</h1>
+      <h1 style={{ textAlign: 'center', padding: '84px 24px 28px', margin: 0 }}>New Campaign</h1>
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 24px 24px' }}>
 
       {error && (
         <div style={{ color: 'var(--danger)', fontSize: 13, padding: '10px 14px', marginBottom: 8, background: 'rgba(233,69,96,0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger)' }}>

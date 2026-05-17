@@ -135,6 +135,19 @@ export default function Admin({ user, isAdmin }) {
     }
   };
 
+  useEffect(() => {
+    if (!campaign) return;
+    setCenterContent(
+      <button
+        className="btn btn-secondary btn-sm"
+        onClick={() => navigate(`/game/${campaignId}`)}
+      >
+        Enter Game
+      </button>
+    );
+    return () => setCenterContent(null);
+  }, [campaign, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   if (error || (campaign && !isAdmin(campaign))) {
@@ -153,19 +166,6 @@ export default function Admin({ user, isAdmin }) {
   const inviteUrl = campaign?.invite_token
     ? `${window.location.origin}/campaigns/invite/${campaign.invite_token}`
     : null;
-
-  useEffect(() => {
-    if (!campaign) return;
-    setCenterContent(
-      <button
-        className="btn btn-secondary btn-sm"
-        onClick={() => navigate(`/game/${campaignId}`)}
-      >
-        Enter Game
-      </button>
-    );
-    return () => setCenterContent(null);
-  }, [campaign, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>

@@ -53,6 +53,18 @@ export default function Lobby({ user, isAdmin }) {
     }
   }, [campaign, navigate, campaignId]);
 
+  // Announce join on mount; announce leave on unmount (+ beacon for tab close)
+  useEffect(() => {
+    if (!campaignId) return;
+    api.lobbyPresence(campaignId, 'join').catch(() => {});
+    const handleUnload = () => api.lobbyPresenceBeacon(campaignId);
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      api.lobbyPresence(campaignId, 'leave').catch(() => {});
+    };
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load chat history on mount + poll every 5s as SignalR fallback.
   // Full replace with history on each cycle; preserves any optimistic
   // in-flight messages (sends not yet persisted) at the end of the list.
@@ -274,7 +286,7 @@ export default function Lobby({ user, isAdmin }) {
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 240 }}>
         <h3 style={{ margin: 0, color: 'var(--gold)' }}>Lobby Chat</h3>
 
-        <div className="scroll" style={{ flex: 1, maxHeight: 260, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="scroll" style={{ height: 'calc(50vh - 120px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {messages.length === 0 && (
             <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
               No messages yet. Say hello while you wait!

@@ -13,9 +13,10 @@ import bcrypt
 
 from functions.activities.cosmos import (
     get_campaign_player, get_campaign_players, get_story_state, upsert_story_state,
-    upsert_character, upsert_campaign_player, upsert_player, get_player, create_campaign,
-    delete_campaign_player, delete_character,
+    upsert_character, upsert_campaign_player, upsert_player, get_player, get_character,
+    create_campaign, delete_campaign_player, delete_character,
     get_lobby_chat_doc, upsert_lobby_chat_doc,
+    get_lobby_presence_doc, upsert_lobby_presence_doc,
 )
 
 
@@ -260,3 +261,63 @@ def append_lobby_message(campaign_id: str, message: dict) -> None:
     doc.setdefault("messages", [])
     doc["messages"].append(message)
     upsert_lobby_chat_doc(doc)
+
+
+def lobby_presence_join(campaign_id: str, email: str) -> dict:
+    """
+    Mark a player as present in the lobby.
+    Returns a system message dict for the join announcement.
+    """
+    char = get_character({"campaign_id": campaign_id, "email": email})
+    char_name = char.get("name", "Adventurer") if char else "Adventurer"
+    char_class = char.get("class", "") if char else ""
+    level = char.get("level", 1) if char else 1
+
+    player = get_player(email)
+    display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+
+    try:
+        presence = get_lobby_presence_doc(campaign_id, email)
+    except Exception:
+        presence = {
+            "id": f"presence_{campaign_id}_{email}",
+            "type": "lobby_presence",
+            "campaign_id": campaign_id,
+            "email": email,
+        }
+
+    now = datetime.now(timezone.utc).isoformat()
+    presence["status"] = "present"
+    presence["display_name"] = display_name
+    presence["updated_at"] = now
+    upsert_lobby_presence_doc(presence)
+
+    parts = [p for p in [char_name, char_class, f"level {level}"] if p]
+    text = f"⚔ {display_name} has entered the lobby — {', '.join(parts)}"
+
+    return {
+        "message_id": str(uuid.uuid4()),
+        "type": "system",
+        "text": text,
+        "timestamp": now,
+    }
+
+
+def lobby_presence_leave(campaign_id: str, email: str) -> None:
+    """
+    Mark a player as having left the lobby.
+    The caller should enqueue a delayed leave announcement.
+    """
+    try:
+        presence = get_lobby_presence_doc(campaign_id, email)
+    except Exception:
+        presence = {
+            "id": f"presence_{campaign_id}_{email}",
+            "type": "lobby_presence",
+            "campaign_id": campaign_id,
+            "email": email,
+        }
+
+    presence["status"] = "left"
+    presence["updated_at"] = datetime.now(timezone.utc).isoformat()
+    upsert_lobby_presence_doc(presence)

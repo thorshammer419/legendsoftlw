@@ -472,3 +472,17 @@ def get_lobby_chat_doc(campaign_id: str) -> dict:
 def upsert_lobby_chat_doc(doc: dict) -> dict:
     c = _container()
     return c.upsert_item(body=doc)
+
+
+# ---------------------------------------------------------------------------
+# Lobby presence
+# ---------------------------------------------------------------------------
+
+def get_lobby_presence_doc(campaign_id: str, email: str) -> dict:
+    c = _container()
+    return c.read_item(item=f"presence_{campaign_id}_{email}", partition_key=campaign_id)
+
+
+def upsert_lobby_presence_doc(doc: dict) -> dict:
+    c = _container()
+    return c.upsert_item(body=doc)

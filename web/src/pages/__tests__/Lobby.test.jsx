@@ -24,6 +24,8 @@ jest.mock('../../services/api', () => ({
     regenerateInviteToken: jest.fn(),
     launchCampaign: jest.fn(),
     getLobbyChatHistory: jest.fn(),
+    lobbyPresence: jest.fn(),
+    lobbyPresenceBeacon: jest.fn(),
   },
 }));
 
@@ -87,6 +89,7 @@ beforeEach(() => {
   mockNavigate.mockReset();
   // Default: empty history, no errors
   api.getLobbyChatHistory.mockResolvedValue({ messages: [] });
+  api.lobbyPresence.mockResolvedValue({});
 });
 
 // ---------------------------------------------------------------------------
@@ -415,5 +418,29 @@ describe('Launch redirect', () => {
     mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'lobby' };
     renderAsPlayer();
     expect(mockNavigate).not.toHaveBeenCalledWith('/game/test-campaign', expect.anything());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Presence announcements — join on mount, leave on unmount
+// ---------------------------------------------------------------------------
+
+describe('Presence announcements', () => {
+  test('calls lobbyPresence join on mount', async () => {
+    renderAsPlayer();
+    await waitFor(() => expect(api.lobbyPresence).toHaveBeenCalledWith('test-campaign', 'join'));
+  });
+
+  test('calls lobbyPresence leave on unmount', async () => {
+    const { unmount } = renderAsPlayer();
+    await act(async () => { await Promise.resolve(); });
+    unmount();
+    await waitFor(() => expect(api.lobbyPresence).toHaveBeenCalledWith('test-campaign', 'leave'));
+  });
+
+  test('chat window has height based on screen height', () => {
+    renderAsPlayer();
+    const scrollArea = document.querySelector('.scroll');
+    expect(scrollArea).toHaveStyle('height: calc(50vh - 120px)');
   });
 });

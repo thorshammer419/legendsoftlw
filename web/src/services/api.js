@@ -68,6 +68,18 @@ export const api = {
     }),
   getLobbyChatHistory: (campaignId) =>
     req(`/campaigns/${campaignId}/lobby/chat`),
+  lobbyPresence: (campaignId, action) =>
+    req(`/campaigns/${campaignId}/lobby/presence`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    }),
+  lobbyPresenceBeacon: (campaignId) => {
+    const blob = new Blob(
+      [JSON.stringify({ action: 'leave' })],
+      { type: 'application/json' }
+    );
+    navigator.sendBeacon(`/api/campaigns/${campaignId}/lobby/presence`, blob);
+  },
   launchCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
   deleteCampaign: (campaignId) =>

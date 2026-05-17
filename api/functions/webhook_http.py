@@ -19,6 +19,7 @@ from functions.activities.cosmos import (
     get_action_list, get_narrative_log,
     get_allowed_user, upsert_allowed_user, delete_allowed_user, list_allowed_users,
     list_all_campaigns, get_campaign_by_invite_token,
+    get_lobby_presence_doc,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -29,6 +30,7 @@ from functions.activities.email import (
 from functions.domain import (
     DomainError, submit_player_action, create_new_campaign, save_character,
     join_campaign_as_observer, leave_campaign, append_lobby_message, get_lobby_chat,
+    lobby_presence_join, lobby_presence_leave,
 )
 from helpers.queue import enqueue
 from helpers.llm import openai_client
@@ -618,6 +620,73 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
         "player_emails": [p["email"] for p in all_players],
     })
     return _json_response({"status": "launched"})
+
+
+async def lobby_presence_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp or cp.get("status") != "active":
+        return _error("Not an active player in this campaign", 403)
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    action = body.get("action")
+
+    if action == "join":
+        message = lobby_presence_join(campaign_id, email)
+        append_lobby_message(campaign_id, message)
+        all_players = get_campaign_players(campaign_id)
+        broadcast_lobby_event({
+            **message,
+            "campaign_id": campaign_id,
+            "player_emails": [p["email"] for p in all_players],
+        })
+        return _json_response({"status": "joined"})
+
+    if action == "leave":
+        lobby_presence_leave(campaign_id, email)
+        enqueue("lobby-leave-announce", {"campaign_id": campaign_id, "email": email},
+                visibility_timeout=10)
+        return _json_response({"status": "left"})
+
+    return _error("action must be 'join' or 'leave'")
+
+
+def process_lobby_leave_queue(data: dict) -> None:
+    campaign_id = data["campaign_id"]
+    email = data["email"]
+
+    try:
+        presence = get_lobby_presence_doc(campaign_id, email)
+    except Exception:
+        return
+
+    if presence.get("status") != "left":
+        return
+
+    display_name = presence.get("display_name", email.split("@")[0])
+    message = {
+        "message_id": str(uuid.uuid4()),
+        "type": "system",
+        "text": f"{display_name} has left the lobby",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    append_lobby_message(campaign_id, message)
+
+    all_players = get_campaign_players(campaign_id)
+    broadcast_lobby_event({
+        **message,
+        "campaign_id": campaign_id,
+        "player_emails": [p["email"] for p in all_players],
+    })
 
 
 async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:

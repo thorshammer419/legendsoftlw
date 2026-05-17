@@ -155,6 +155,11 @@ async def lobby_launch(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.lobby_launch_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/lobby/presence", methods=["POST"])
+async def lobby_presence(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.lobby_presence_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}", methods=["DELETE"])
 async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.delete_campaign_handler(req)
@@ -256,3 +261,11 @@ def process_novel_queue(msg: func.QueueMessage) -> None:
                    connection="AzureWebJobsStorage")
 def process_intro_queue(msg: func.QueueMessage) -> None:
     campaign_intro_from_queue(msg)
+
+
+@app.queue_trigger(arg_name="msg", queue_name="lobby-leave-announce",
+                   connection="AzureWebJobsStorage")
+def process_lobby_leave_queue(msg: func.QueueMessage) -> None:
+    import json, base64
+    data = json.loads(base64.b64decode(msg.get_body()).decode())
+    wh.process_lobby_leave_queue(data)

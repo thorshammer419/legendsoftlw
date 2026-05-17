@@ -15,6 +15,8 @@ from functions.domain import (
     leave_campaign,
     get_lobby_chat,
     append_lobby_message,
+    lobby_presence_join,
+    lobby_presence_leave,
 )
 
 
@@ -574,3 +576,135 @@ class TestAppendLobbyMessage:
         append_lobby_message(campaign_id, new_msg)
         saved = cosmos_mocks["upsert_lobby_chat_doc"].call_args[0][0]
         assert saved["messages"] == [existing, new_msg]
+
+
+# ---------------------------------------------------------------------------
+# lobby_presence_join
+# ---------------------------------------------------------------------------
+
+class TestLobbyPresenceJoin:
+    @pytest.fixture
+    def character(self, campaign_id, player_email):
+        return {
+            "id": f"character_{campaign_id}_{player_email}",
+            "type": "character",
+            "campaign_id": campaign_id,
+            "email": player_email,
+            "name": "Shadowbane",
+            "class": "Rogue",
+            "level": 3,
+        }
+
+    def test_returns_system_message_with_join_text(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert result["type"] == "system"
+        assert "Aria" in result["text"]
+        assert "Shadowbane" in result["text"]
+        assert "Rogue" in result["text"]
+        assert "level 3" in result["text"]
+
+    def test_join_text_includes_sword_emoji(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert result["text"].startswith("⚔")
+
+    def test_persists_presence_doc_as_present(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        lobby_presence_join(campaign_id, player_email)
+
+        cosmos_mocks["upsert_lobby_presence_doc"].assert_called_once()
+        saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
+        assert saved["status"] == "present"
+        assert saved["campaign_id"] == campaign_id
+        assert saved["email"] == player_email
+
+    def test_stores_display_name_on_presence_doc(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        lobby_presence_join(campaign_id, player_email)
+
+        saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
+        assert saved["display_name"] == "Aria"
+
+    def test_falls_back_to_email_prefix_when_no_player_doc(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = None
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert "adventurer" in result["text"]
+
+    def test_result_has_message_id_and_timestamp(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert "message_id" in result
+        assert "timestamp" in result
+
+
+# ---------------------------------------------------------------------------
+# lobby_presence_leave
+# ---------------------------------------------------------------------------
+
+class TestLobbyPresenceLeave:
+    def test_persists_presence_doc_as_left(
+        self, cosmos_mocks, campaign_id, player_email
+    ):
+        cosmos_mocks["get_lobby_presence_doc"].side_effect = Exception("not found")
+
+        lobby_presence_leave(campaign_id, player_email)
+
+        cosmos_mocks["upsert_lobby_presence_doc"].assert_called_once()
+        saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
+        assert saved["status"] == "left"
+        assert saved["campaign_id"] == campaign_id
+        assert saved["email"] == player_email
+
+    def test_updates_existing_presence_doc(
+        self, cosmos_mocks, campaign_id, player_email
+    ):
+        existing = {
+            "id": f"presence_{campaign_id}_{player_email}",
+            "type": "lobby_presence",
+            "campaign_id": campaign_id,
+            "email": player_email,
+            "status": "present",
+            "display_name": "Aria",
+        }
+        cosmos_mocks["get_lobby_presence_doc"].return_value = existing
+
+        lobby_presence_leave(campaign_id, player_email)
+
+        saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
+        assert saved["status"] == "left"
+        assert saved["display_name"] == "Aria"

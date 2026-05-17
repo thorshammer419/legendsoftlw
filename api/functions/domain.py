@@ -15,6 +15,7 @@ from functions.activities.cosmos import (
     get_campaign_player, get_campaign_players, get_story_state, upsert_story_state,
     upsert_character, upsert_campaign_player, upsert_player, get_player, create_campaign,
     delete_campaign_player, delete_character,
+    get_lobby_chat_doc, upsert_lobby_chat_doc,
 )
 
 
@@ -233,3 +234,28 @@ def join_campaign_as_observer(campaign_id: str, email: str) -> dict:
     }
     upsert_campaign_player(cp)
     return cp
+
+
+def get_lobby_chat(campaign_id: str) -> list:
+    """Return full chat message list for a campaign lobby. Returns [] if none yet."""
+    try:
+        doc = get_lobby_chat_doc(campaign_id)
+        return doc.get("messages", [])
+    except Exception:
+        return []
+
+
+def append_lobby_message(campaign_id: str, message: dict) -> None:
+    """Persist a single message to the lobby chat document."""
+    try:
+        doc = get_lobby_chat_doc(campaign_id)
+    except Exception:
+        doc = {
+            "id": f"lobby_chat_{campaign_id}",
+            "type": "lobby_chat",
+            "campaign_id": campaign_id,
+            "messages": [],
+        }
+    doc.setdefault("messages", [])
+    doc["messages"].append(message)
+    upsert_lobby_chat_doc(doc)

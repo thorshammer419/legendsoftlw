@@ -13,6 +13,8 @@ from functions.domain import (
     save_character,
     join_campaign_as_observer,
     leave_campaign,
+    get_lobby_chat,
+    append_lobby_message,
 )
 
 
@@ -503,3 +505,49 @@ class TestLeaveCampaign:
         result = leave_campaign(campaign_id, player_email)
 
         assert result["display_name"] == "adventurer"  # prefix of adventurer@example.com
+
+
+# ---------------------------------------------------------------------------
+# get_lobby_chat / append_lobby_message
+# ---------------------------------------------------------------------------
+
+class TestGetLobbyChat:
+    def test_returns_empty_list_when_no_history(self, cosmos_mocks, campaign_id):
+        cosmos_mocks["get_lobby_chat_doc"].side_effect = Exception("not found")
+        result = get_lobby_chat(campaign_id)
+        assert result == []
+
+    def test_returns_messages_from_existing_doc(self, cosmos_mocks, campaign_id):
+        msg = {"message_id": "abc", "type": "chat", "text": "hello"}
+        cosmos_mocks["get_lobby_chat_doc"].return_value = {"messages": [msg]}
+        result = get_lobby_chat(campaign_id)
+        assert result == [msg]
+
+    def test_returns_empty_list_when_doc_has_no_messages_key(self, cosmos_mocks, campaign_id):
+        cosmos_mocks["get_lobby_chat_doc"].return_value = {}
+        result = get_lobby_chat(campaign_id)
+        assert result == []
+
+
+class TestAppendLobbyMessage:
+    def test_appends_message_to_empty_history(self, cosmos_mocks, campaign_id):
+        cosmos_mocks["get_lobby_chat_doc"].side_effect = Exception("not found")
+        msg = {"message_id": "uuid1", "type": "chat", "text": "hi"}
+        append_lobby_message(campaign_id, msg)
+        cosmos_mocks["upsert_lobby_chat_doc"].assert_called_once()
+        saved = cosmos_mocks["upsert_lobby_chat_doc"].call_args[0][0]
+        assert saved["messages"] == [msg]
+        assert saved["id"] == f"lobby_chat_{campaign_id}"
+        assert saved["campaign_id"] == campaign_id
+
+    def test_appends_to_existing_messages(self, cosmos_mocks, campaign_id):
+        existing = {"message_id": "old", "text": "first"}
+        cosmos_mocks["get_lobby_chat_doc"].return_value = {
+            "id": f"lobby_chat_{campaign_id}",
+            "campaign_id": campaign_id,
+            "messages": [existing],
+        }
+        new_msg = {"message_id": "new", "text": "second"}
+        append_lobby_message(campaign_id, new_msg)
+        saved = cosmos_mocks["upsert_lobby_chat_doc"].call_args[0][0]
+        assert saved["messages"] == [existing, new_msg]

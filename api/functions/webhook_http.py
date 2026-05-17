@@ -7,6 +7,7 @@ import json
 import base64
 import os
 import secrets
+import uuid
 from datetime import datetime, timezone
 
 import bcrypt
@@ -27,7 +28,7 @@ from functions.activities.email import (
 )
 from functions.domain import (
     DomainError, submit_player_action, create_new_campaign, save_character,
-    join_campaign_as_observer, leave_campaign,
+    join_campaign_as_observer, leave_campaign, append_lobby_message, get_lobby_chat,
 )
 from helpers.queue import enqueue
 from helpers.llm import openai_client
@@ -556,18 +557,42 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+    char_class = player.get("char_class") if player else None
     all_players = get_campaign_players(campaign_id)
+    message_id = (body.get("message_id") or "").strip() or str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
 
-    broadcast_lobby_event({
-        "campaign_id": campaign_id,
+    message = {
+        "message_id": message_id,
         "type": "chat",
         "email": email,
         "display_name": display_name,
+        "char_class": char_class,
         "text": text,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": timestamp,
+    }
+    append_lobby_message(campaign_id, message)
+
+    broadcast_lobby_event({
+        **message,
+        "campaign_id": campaign_id,
         "player_emails": [p["email"] for p in all_players],
     })
     return _json_response({"status": "sent"})
+
+
+async def lobby_chat_history_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp or cp.get("status") != "active":
+        return _error("Not a member of this campaign", 403)
+
+    messages = get_lobby_chat(campaign_id)
+    return _json_response({"messages": messages})
 
 
 async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:

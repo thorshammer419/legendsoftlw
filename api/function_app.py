@@ -145,6 +145,11 @@ async def lobby_message(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.lobby_message_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/lobby/chat", methods=["GET"])
+async def lobby_chat_history(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.lobby_chat_history_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}/lobby/launch", methods=["POST"])
 async def lobby_launch(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.lobby_launch_handler(req)

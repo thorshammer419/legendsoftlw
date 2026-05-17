@@ -458,3 +458,17 @@ def get_narrative_log(campaign_id: str) -> dict:
         return c.read_item(item=f"narrative_{campaign_id}", partition_key=campaign_id)
     except exceptions.CosmosResourceNotFoundError:
         return {"rounds": []}
+
+
+# ---------------------------------------------------------------------------
+# Lobby chat history
+# ---------------------------------------------------------------------------
+
+def get_lobby_chat_doc(campaign_id: str) -> dict:
+    c = _container()
+    return c.read_item(item=f"lobby_chat_{campaign_id}", partition_key=campaign_id)
+
+
+def upsert_lobby_chat_doc(doc: dict) -> dict:
+    c = _container()
+    return c.upsert_item(body=doc)

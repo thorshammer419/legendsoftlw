@@ -61,11 +61,13 @@ export const api = {
   exportNovel: (campaignId) =>
     req(`/campaigns/${campaignId}/admin/export-novel`, { method: 'POST' }),
 
-  sendLobbyMessage: (campaignId, text) =>
+  sendLobbyMessage: (campaignId, text, messageId) =>
     req(`/campaigns/${campaignId}/lobby/message`, {
       method: 'POST',
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, message_id: messageId }),
     }),
+  getLobbyChatHistory: (campaignId) =>
+    req(`/campaigns/${campaignId}/lobby/chat`),
   launchCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
   deleteCampaign: (campaignId) =>

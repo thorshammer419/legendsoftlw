@@ -23,6 +23,7 @@ jest.mock('../../services/api', () => ({
     sendLobbyMessage: jest.fn(),
     regenerateInviteToken: jest.fn(),
     launchCampaign: jest.fn(),
+    getLobbyChatHistory: jest.fn(),
   },
 }));
 
@@ -82,6 +83,8 @@ function renderAsCreator() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNavigate.mockReset();
+  // Default: empty history, no errors
+  api.getLobbyChatHistory.mockResolvedValue({ messages: [] });
 });
 
 // ---------------------------------------------------------------------------
@@ -174,5 +177,135 @@ describe('SignalR events', () => {
     // refresh is called — player list silently updates
     // useCampaign mock's refresh is a jest.fn(); checking navigate wasn't called
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat history — load on mount + polling
+// ---------------------------------------------------------------------------
+
+describe('Chat history load on mount', () => {
+  test('fetches chat history on mount', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({ messages: [] });
+    renderAsPlayer();
+    await waitFor(() => expect(api.getLobbyChatHistory).toHaveBeenCalledWith('test-campaign'));
+  });
+
+  test('displays messages returned from history API', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 'a1', type: 'chat', display_name: 'Aria', text: 'Hello there!', timestamp: '2025-01-01T10:00:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('Hello there!')).toBeInTheDocument());
+  });
+
+  test('shows no messages placeholder when history is empty', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({ messages: [] });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText(/no messages yet/i)).toBeInTheDocument());
+  });
+});
+
+describe('Optimistic send', () => {
+  test('sent message appears immediately before API response', async () => {
+    const user = userEvent.setup();
+    api.sendLobbyMessage.mockReturnValue(new Promise(() => {})); // never resolves
+    renderAsPlayer();
+    await waitFor(() => expect(api.getLobbyChatHistory).toHaveBeenCalled());
+
+    const input = screen.getByPlaceholderText(/say something/i);
+    await user.type(input, 'Optimistic message');
+    await user.click(screen.getByRole('button', { name: /^send$/i }));
+
+    expect(screen.getByText('Optimistic message')).toBeInTheDocument();
+  });
+
+  test('SignalR echo with same message_id does not duplicate the optimistic message', async () => {
+    const user = userEvent.setup();
+    let capturedMessageId;
+    api.sendLobbyMessage.mockImplementation((_cid, _text, msgId) => {
+      capturedMessageId = msgId;
+      return Promise.resolve({});
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(api.getLobbyChatHistory).toHaveBeenCalled());
+
+    const input = screen.getByPlaceholderText(/say something/i);
+    await user.type(input, 'Echo test');
+    await user.click(screen.getByRole('button', { name: /^send$/i }));
+
+    expect(screen.getByText('Echo test')).toBeInTheDocument();
+
+    // Find the message_id that was used for the optimistic entry from the rendered DOM
+    // and simulate SignalR echoing it back
+    await waitFor(() => expect(capturedMessageId).toBeDefined());
+    act(() => lobbyEventHandler({ message_id: capturedMessageId, type: 'chat', display_name: 'Me', text: 'Echo test', timestamp: new Date().toISOString() }));
+
+    const matches = screen.getAllByText('Echo test');
+    expect(matches).toHaveLength(1);
+  });
+});
+
+describe('MMO-style chat UI', () => {
+  test('renders timestamp in HH:MM format', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 't1', type: 'chat', display_name: 'Aria', char_class: 'Rogue', text: 'Hi!', timestamp: '2025-06-15T14:30:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText(/14:30/)).toBeInTheDocument());
+  });
+
+  test('system messages render as italic without class coloring', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 's1', type: 'system', text: 'A player has joined.', timestamp: '2025-06-15T14:31:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('A player has joined.')).toBeInTheDocument());
+  });
+
+  test('chat messages show display_name: text format', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 'c1', type: 'chat', display_name: 'Aria', char_class: 'Rogue', text: 'Ready to adventure!', timestamp: '2025-06-15T14:32:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => {
+      expect(screen.getByText('Aria:')).toBeInTheDocument();
+      expect(screen.getByText('Ready to adventure!')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Chat history deduplication', () => {
+  test('SignalR chat event with same message_id as history does not create duplicate', async () => {
+    const msg = { message_id: 'dup1', type: 'chat', display_name: 'Aria', text: 'Hi!', timestamp: '2025-01-01T10:00:00Z' };
+    api.getLobbyChatHistory.mockResolvedValue({ messages: [msg] });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('Hi!')).toBeInTheDocument());
+
+    act(() => lobbyEventHandler({ ...msg }));
+
+    const matches = screen.getAllByText('Hi!');
+    expect(matches).toHaveLength(1);
+  });
+
+  test('SignalR chat event with new message_id is appended', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [{ message_id: 'first', type: 'chat', display_name: 'Aria', text: 'First', timestamp: '2025-01-01T10:00:00Z' }],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('First')).toBeInTheDocument());
+
+    act(() => lobbyEventHandler({ message_id: 'second', type: 'chat', display_name: 'Bard', text: 'Second', timestamp: '2025-01-01T10:01:00Z' }));
+
+    expect(screen.getByText('Second')).toBeInTheDocument();
+    expect(screen.getByText('First')).toBeInTheDocument();
   });
 });

@@ -5,6 +5,31 @@ import { useSignalR } from '../hooks/useSignalR';
 import { useCampaign } from '../hooks/useCampaign';
 import { useNavbar } from '../context/NavbarContext';
 
+const CLASS_COLORS = {
+  Barbarian: '#e74c3c',
+  Bard: '#9b59b6',
+  Cleric: '#f1c40f',
+  Druid: '#27ae60',
+  Fighter: '#e67e22',
+  Monk: '#1abc9c',
+  Paladin: '#3498db',
+  Ranger: '#2ecc71',
+  Rogue: '#95a5a6',
+  Sorcerer: '#e91e63',
+  Warlock: '#6c3483',
+  Wizard: '#2980b9',
+};
+
+function classColor(charClass) {
+  return CLASS_COLORS[charClass] || 'var(--gold)';
+}
+
+function formatTime(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 export default function Lobby({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
@@ -12,6 +37,7 @@ export default function Lobby({ user, isAdmin }) {
 
   const { campaign, players, storyState, loading, refresh } = useCampaign(campaignId);
   const [messages, setMessages] = useState([]);
+  const seenIds = useRef(new Set());
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [launching, setLaunching] = useState(false);
@@ -26,6 +52,17 @@ export default function Lobby({ user, isAdmin }) {
       navigate(`/game/${campaignId}`, { replace: true });
     }
   }, [campaign, storyState, navigate, campaignId]);
+
+  // Load chat history on mount
+  useEffect(() => {
+    if (!campaignId) return;
+    api.getLobbyChatHistory(campaignId)
+      .then(({ messages: history }) => {
+        setMessages(history);
+        history.forEach((m) => { if (m.message_id) seenIds.current.add(m.message_id); });
+      })
+      .catch(() => {});
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -46,6 +83,9 @@ export default function Lobby({ user, isAdmin }) {
       return;
     }
     if (event.type === 'chat') {
+      const id = event.message_id;
+      if (id && seenIds.current.has(id)) return;
+      if (id) seenIds.current.add(id);
       setMessages((prev) => [...prev, event]);
     }
     if (event.type === 'player_ready') {
@@ -66,11 +106,25 @@ export default function Lobby({ user, isAdmin }) {
     if (!text || sending) return;
     setSending(true);
     setInput('');
+
+    const messageId = crypto.randomUUID();
+    seenIds.current.add(messageId);
+    setMessages((prev) => [...prev, {
+      message_id: messageId,
+      type: 'chat',
+      display_name: 'You',
+      text,
+      timestamp: new Date().toISOString(),
+      optimistic: true,
+    }]);
+
     try {
-      await api.sendLobbyMessage(campaignId, text);
+      await api.sendLobbyMessage(campaignId, text, messageId);
     } catch (err) {
       console.error('Send failed:', err);
       setInput(text);
+      seenIds.current.delete(messageId);
+      setMessages((prev) => prev.filter((m) => m.message_id !== messageId));
     } finally {
       setSending(false);
     }
@@ -208,12 +262,15 @@ export default function Lobby({ user, isAdmin }) {
             </p>
           )}
           {messages.map((m, i) => (
-            <div key={i} style={{ fontSize: 13 }}>
+            <div key={m.message_id || i} style={{ fontSize: 13 }}>
               {m.type === 'system' ? (
                 <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{m.text}</span>
               ) : (
                 <>
-                  <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{m.display_name}: </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>
+                    {formatTime(m.timestamp)}
+                  </span>
+                  <span style={{ color: classColor(m.char_class), fontWeight: 600 }}>{m.display_name}: </span>
                   <span style={{ color: 'var(--text-primary)' }}>{m.text}</span>
                 </>
               )}

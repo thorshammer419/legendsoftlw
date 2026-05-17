@@ -378,6 +378,29 @@ class TestSaveCharacter:
 
         assert result == {"first_completion": False}
 
+    def test_stores_char_class_on_campaign_player(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = False
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        save_character(campaign_id, player_email, {"name": "Kira", "class": "Rogue"})
+
+        saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved_cp["char_class"] == "Rogue"
+
+    def test_stores_char_class_on_resubmission(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = True
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+
+        save_character(campaign_id, player_email, {"name": "Kira", "class": "Wizard"})
+
+        saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved_cp["char_class"] == "Wizard"
+
     def test_persists_character_with_correct_ids(
         self, cosmos_mocks, campaign_id, player_email, active_campaign_player
     ):

@@ -48,10 +48,10 @@ export default function Lobby({ user, isAdmin }) {
 
   // If campaign already launched, go straight to game
   useEffect(() => {
-    if (campaign?.status === 'active' && (storyState?.round_number ?? 0) > 0) {
+    if (campaign?.status === 'active') {
       navigate(`/game/${campaignId}`, { replace: true });
     }
-  }, [campaign, storyState, navigate, campaignId]);
+  }, [campaign, navigate, campaignId]);
 
   // Load chat history on mount
   useEffect(() => {

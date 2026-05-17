@@ -35,20 +35,22 @@ jest.mock('../../hooks/useSignalR', () => ({
   },
 }));
 
+const mockCampaignState = {
+  campaign: {
+    name: 'Test Campaign',
+    party_name: 'The Adventurers',
+    creator_emails: ['creator@example.com'],
+    invite_token: null,
+    status: 'lobby',
+  },
+  players: [],
+  storyState: { round_number: 0 },
+  loading: false,
+  refresh: jest.fn(),
+};
+
 jest.mock('../../hooks/useCampaign', () => ({
-  useCampaign: () => ({
-    campaign: {
-      name: 'Test Campaign',
-      party_name: 'The Adventurers',
-      creator_emails: ['creator@example.com'],
-      invite_token: null,
-      status: 'lobby',
-    },
-    players: [],
-    storyState: { round_number: 0 },
-    loading: false,
-    refresh: jest.fn(),
-  }),
+  useCampaign: () => mockCampaignState,
 }));
 
 function NavbarCenterSlot() {
@@ -307,5 +309,36 @@ describe('Chat history deduplication', () => {
 
     expect(screen.getByText('Second')).toBeInTheDocument();
     expect(screen.getByText('First')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Launch redirect — navigates when status becomes active, regardless of round
+// ---------------------------------------------------------------------------
+
+describe('Launch redirect', () => {
+  test('navigates to game when status is active and round_number is 0', async () => {
+    mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'active' };
+    mockCampaignState.storyState = { round_number: 0 };
+    renderAsPlayer();
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/game/test-campaign', { replace: true }));
+    // restore
+    mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'lobby' };
+  });
+
+  test('navigates to game when status is active and round_number is greater than 0', async () => {
+    mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'active' };
+    mockCampaignState.storyState = { round_number: 2 };
+    renderAsPlayer();
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/game/test-campaign', { replace: true }));
+    // restore
+    mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'lobby' };
+    mockCampaignState.storyState = { round_number: 0 };
+  });
+
+  test('does not navigate when status is lobby', () => {
+    mockCampaignState.campaign = { ...mockCampaignState.campaign, status: 'lobby' };
+    renderAsPlayer();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/game/test-campaign', expect.anything());
   });
 });

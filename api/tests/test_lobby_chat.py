@@ -94,6 +94,26 @@ class TestLobbyMessagePost:
         assert broadcast_payload["message_id"] == saved_msg["message_id"]
 
     @pytest.mark.asyncio
+    async def test_char_class_from_campaign_player_included_in_persisted_message(self):
+        from functions.webhook_http import lobby_message_handler
+        cp_with_class = {**ACTIVE_CP, "char_class": "Ranger"}
+        with patch(f"{MODULE}.get_campaign_player", return_value=cp_with_class):
+            req = _make_req({"text": "Test"})
+            await lobby_message_handler(req)
+        saved_msg = self.mock_append.call_args[0][1]
+        assert saved_msg["char_class"] == "Ranger"
+
+    @pytest.mark.asyncio
+    async def test_char_class_from_campaign_player_included_in_broadcast(self):
+        from functions.webhook_http import lobby_message_handler
+        cp_with_class = {**ACTIVE_CP, "char_class": "Ranger"}
+        with patch(f"{MODULE}.get_campaign_player", return_value=cp_with_class):
+            req = _make_req({"text": "Test"})
+            await lobby_message_handler(req)
+        broadcast_payload = self.mock_broadcast.call_args[0][0]
+        assert broadcast_payload["char_class"] == "Ranger"
+
+    @pytest.mark.asyncio
     async def test_non_active_player_gets_403(self):
         from functions.webhook_http import lobby_message_handler
         with patch(f"{MODULE}.get_campaign_player", return_value={"status": "inactive"}):

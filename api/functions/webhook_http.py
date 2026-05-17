@@ -557,7 +557,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
-    char_class = player.get("char_class") if player else None
+    char_class = cp.get("char_class") or None
     all_players = get_campaign_players(campaign_id)
     message_id = (body.get("message_id") or "").strip() or str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()

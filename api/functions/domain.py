@@ -174,6 +174,7 @@ def save_character(campaign_id: str, email: str, body: dict) -> dict:
 
     was_complete = cp.get("character_creation_complete", False)
     cp["character_creation_complete"] = True
+    cp["char_class"] = body.get("class", "")
     upsert_campaign_player(cp)
 
     if not was_complete:

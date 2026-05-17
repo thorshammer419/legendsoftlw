@@ -313,6 +313,48 @@ describe('Chat history deduplication', () => {
 });
 
 // ---------------------------------------------------------------------------
+// "You:" label — own messages always show "You" regardless of source
+// ---------------------------------------------------------------------------
+
+describe('"You:" label for own messages', () => {
+  test('history message from current user shows "You:" not their display_name', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 'own1', type: 'chat', email: 'player@example.com', display_name: 'PlayerOne', text: 'My message', timestamp: '2025-01-01T10:00:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('You:')).toBeInTheDocument());
+    expect(screen.queryByText('PlayerOne:')).not.toBeInTheDocument();
+  });
+
+  test('history message from another user shows their display_name', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [
+        { message_id: 'other1', type: 'chat', email: 'other@example.com', display_name: 'OtherPlayer', text: 'Their message', timestamp: '2025-01-01T10:00:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText('OtherPlayer:')).toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Polling fallback — refresh is called on interval
+// ---------------------------------------------------------------------------
+
+describe('Polling fallback', () => {
+  test('calls refresh every 5 seconds', () => {
+    jest.useFakeTimers();
+    renderAsPlayer();
+    const callsBefore = mockCampaignState.refresh.mock.calls.length;
+    act(() => jest.advanceTimersByTime(5000));
+    expect(mockCampaignState.refresh.mock.calls.length).toBeGreaterThan(callsBefore);
+    jest.useRealTimers();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Launch redirect — navigates when status becomes active, regardless of round
 // ---------------------------------------------------------------------------
 

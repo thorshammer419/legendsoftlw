@@ -112,6 +112,7 @@ export default function Lobby({ user, isAdmin }) {
     setMessages((prev) => [...prev, {
       message_id: messageId,
       type: 'chat',
+      email: myEmail,
       display_name: 'You',
       text,
       timestamp: new Date().toISOString(),
@@ -174,6 +175,13 @@ export default function Lobby({ user, isAdmin }) {
   const creatorEmails = campaign?.creator_emails ?? [];
   const myEmail = user?.userDetails;
   const iAmAdmin = isAdmin ? isAdmin(campaign) : creatorEmails.includes(myEmail);
+
+  // Polling fallback: refresh campaign status every 5s so launch navigates
+  // even if SignalR event is missed (cold start, connection not yet established)
+  useEffect(() => {
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [refresh]);
 
   useEffect(() => {
     const totalSteps = iAmAdmin ? 3 : 2;
@@ -270,7 +278,7 @@ export default function Lobby({ user, isAdmin }) {
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>
                     {formatTime(m.timestamp)}
                   </span>
-                  <span style={{ color: classColor(m.char_class), fontWeight: 600 }}>{m.display_name}: </span>
+                  <span style={{ color: classColor(m.char_class), fontWeight: 600 }}>{m.email === myEmail ? 'You' : m.display_name}: </span>
                   <span style={{ color: 'var(--text-primary)' }}>{m.text}</span>
                 </>
               )}

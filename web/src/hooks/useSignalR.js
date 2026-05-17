@@ -8,10 +8,18 @@ export function useSignalR(campaignId, handlers = {}) {
   useEffect(() => {
     if (!campaignId) return;
 
+    let cancelled = false;
     let connection;
 
     async function start() {
-      const info = await api.negotiate(campaignId);
+      let info;
+      try {
+        info = await api.negotiate(campaignId);
+      } catch (err) {
+        if (!cancelled) console.error('SignalR negotiate failed:', err);
+        return;
+      }
+      if (cancelled) return;
 
       connection = new signalR.HubConnectionBuilder()
         .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
@@ -26,14 +34,26 @@ export function useSignalR(campaignId, handlers = {}) {
         connection.on('lobbyEvent', handlers.onLobbyEvent);
       }
 
-      await connection.start();
+      try {
+        await connection.start();
+      } catch (err) {
+        if (!cancelled) console.error('SignalR connection failed:', err);
+        return;
+      }
+
+      if (cancelled) {
+        connection.stop();
+        return;
+      }
       connRef.current = connection;
     }
 
-    start().catch(console.error);
+    start();
 
     return () => {
+      cancelled = true;
       connection?.stop();
+      connRef.current = null;
     };
   }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 }

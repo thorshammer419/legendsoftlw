@@ -3,10 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import PlayerCard from '../components/admin/PlayerCard';
 import { useCampaign } from '../hooks/useCampaign';
+import { useNavbar } from '../context/NavbarContext';
 
 export default function Admin({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
+  const { setCenterContent } = useNavbar();
   const { campaign, players, loading, error, refresh } = useCampaign(campaignId);
   const [starting, setStarting] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -152,6 +154,19 @@ export default function Admin({ user, isAdmin }) {
     ? `${window.location.origin}/campaigns/invite/${campaign.invite_token}`
     : null;
 
+  useEffect(() => {
+    if (!campaign) return;
+    setCenterContent(
+      <button
+        className="btn btn-secondary btn-sm"
+        onClick={() => navigate(`/game/${campaignId}`)}
+      >
+        Enter Game
+      </button>
+    );
+    return () => setCenterContent(null);
+  }, [campaign, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
 
@@ -166,16 +181,8 @@ export default function Admin({ user, isAdmin }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
+      <div style={{ marginBottom: 28 }}>
         <h1 style={{ margin: 0 }}>{campaign?.name}</h1>
-        <button
-          className="btn btn-secondary btn-sm"
-          style={{ marginLeft: 'auto' }}
-          onClick={() => navigate(`/game/${campaignId}`)}
-        >
-          Enter Game
-        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

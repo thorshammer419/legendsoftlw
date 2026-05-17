@@ -4,9 +4,11 @@ import { logout } from '../services/auth';
 import { api } from '../services/api';
 import CampaignCard from '../components/campaign/CampaignCard';
 import JoinModal from '../components/campaign/JoinModal';
+import { useNavbar } from '../context/NavbarContext';
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate();
+  const { setCenterContent } = useNavbar();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [joinError, setJoinError] = useState(null);
@@ -24,6 +26,18 @@ export default function Dashboard({ user }) {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    setCenterContent(
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {user?.is_system_admin && (
+          <button className="btn btn-secondary btn-sm" onClick={openAccessControl}>Access Control</button>
+        )}
+        <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
+      </div>
+    );
+    return () => setCenterContent(null);
+  }, [user?.is_system_admin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleJoin = async (campaign) => {
     if (campaign.is_password_protected) {
@@ -109,18 +123,10 @@ export default function Dashboard({ user }) {
         onSuccess={(c) => navigate(`/campaigns/${c.campaign_id}/character`)}
       />
     )}
-    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '48px 24px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-        <div>
-          <h1 style={{ marginBottom: 2 }}>Welcome, {displayName}</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Your campaigns</p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          {user?.is_system_admin && (
-            <button className="btn btn-secondary btn-sm" onClick={openAccessControl}>Access Control</button>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
-        </div>
+    <div style={{ position: 'relative', maxWidth: 600, margin: '0 auto', padding: '24px 24px 24px' }}>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ marginBottom: 2 }}>Welcome, {displayName}</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Your campaigns</p>
       </div>
 
       {showAccessControl && (

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CharacterCreate from '../CharacterCreate';
 import { api } from '../../services/api';
+import { NavbarProvider, useNavbar } from '../../context/NavbarContext';
 
 const mockNavigate = jest.fn();
 
@@ -34,25 +35,36 @@ jest.mock('../../hooks/useSignalR', () => ({
   },
 }));
 
+function NavbarCenterSlot() {
+  const { centerContent } = useNavbar();
+  return <div>{centerContent}</div>;
+}
+
 function renderPage() {
   lobbyEventHandler = null;
   return render(
-    <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
-      <Routes>
-        <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'player@example.com' }} />} />
-      </Routes>
-    </MemoryRouter>
+    <NavbarProvider>
+      <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
+        <NavbarCenterSlot />
+        <Routes>
+          <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'player@example.com' }} />} />
+        </Routes>
+      </MemoryRouter>
+    </NavbarProvider>
   );
 }
 
 function renderPageAsCreator() {
   lobbyEventHandler = null;
   return render(
-    <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
-      <Routes>
-        <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'creator@example.com' }} />} />
-      </Routes>
-    </MemoryRouter>
+    <NavbarProvider>
+      <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
+        <NavbarCenterSlot />
+        <Routes>
+          <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: 'creator@example.com' }} />} />
+        </Routes>
+      </MemoryRouter>
+    </NavbarProvider>
   );
 }
 

@@ -46,9 +46,8 @@ export default function CampaignArchive() {
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: 24, height: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
-        <h1 style={{ margin: 0 }}>{campaign?.name}</h1>
-        <span className="badge badge-gold" style={{ marginLeft: 'auto' }}>Completed</span>
+        <h1 style={{ margin: 0, flex: 1 }}>{campaign?.name}</h1>
+        <span className="badge badge-gold">Completed</span>
       </div>
 
       {campaign?.description && (

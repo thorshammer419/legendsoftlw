@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
 import { useSignalR } from '../hooks/useSignalR';
+import { useNavbar } from '../context/NavbarContext';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -62,6 +63,7 @@ const INITIAL_SCORES = { strength: 10, dexterity: 10, constitution: 10, intellig
 export default function CharacterCreate({ user }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
+  const { setCenterContent } = useNavbar();
 
   const [step, setStep] = useState(1); // 1 = identity, 2 = ability scores
   const [saving, setSaving] = useState(false);
@@ -96,6 +98,25 @@ export default function CharacterCreate({ user }) {
 
   const myEmail = user?.userDetails;
   const iAmCreator = creatorEmails.includes(myEmail);
+
+  useEffect(() => {
+    setCenterContent(
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {step === 2 && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Back</button>
+        )}
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
+        <button
+          className="btn btn-sm"
+          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+          onClick={() => setConfirmAction(iAmCreator ? 'cancel' : 'leave')}
+        >
+          {iAmCreator ? 'Cancel Campaign' : 'Leave Campaign'}
+        </button>
+      </div>
+    );
+    return () => setCenterContent(null);
+  }, [step, iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useSignalR(campaignId, {
     onLobbyEvent: (event) => {
@@ -184,22 +205,7 @@ export default function CharacterCreate({ user }) {
         pointerEvents: 'none',
       }} />
     <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        {step === 2 ? (
-          <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>← Back</button>
-        ) : (
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
-        )}
-        <h1 style={{ margin: 0, flex: 1 }}>Create Character</h1>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {step} of 2</span>
-        <button
-          className="btn btn-sm"
-          style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
-          onClick={() => setConfirmAction(iAmCreator ? 'cancel' : 'leave')}
-        >
-          {iAmCreator ? 'Cancel Campaign' : 'Leave Campaign'}
-        </button>
-      </div>
+      <h1 style={{ marginBottom: 28 }}>Create Character</h1>
 
       {step === 1 && maxLevel === null && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>

@@ -243,10 +243,7 @@ export default function CreateCampaign() {
   return (
     <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 24px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Back</button>
-        <h1 style={{ margin: 0 }}>New Campaign</h1>
-      </div>
+      <h1 style={{ marginBottom: 28 }}>New Campaign</h1>
 
       {error && (
         <div style={{ color: 'var(--danger)', fontSize: 13, padding: '10px 14px', marginBottom: 8, background: 'rgba(233,69,96,0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--danger)' }}>

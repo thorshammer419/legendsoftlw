@@ -1,8 +1,9 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import Lobby from '../Lobby';
 import { api } from '../../services/api';
+import { NavbarProvider, useNavbar } from '../../context/NavbarContext';
 
 const mockNavigate = jest.fn();
 
@@ -49,21 +50,32 @@ jest.mock('../../hooks/useCampaign', () => ({
   }),
 }));
 
+function NavbarCenterSlot() {
+  const { centerContent } = useNavbar();
+  return <div>{centerContent}</div>;
+}
+
 function renderAsPlayer() {
   lobbyEventHandler = null;
   return render(
-    <MemoryRouter>
-      <Lobby user={{ userDetails: 'player@example.com' }} />
-    </MemoryRouter>
+    <NavbarProvider>
+      <MemoryRouter>
+        <NavbarCenterSlot />
+        <Lobby user={{ userDetails: 'player@example.com' }} />
+      </MemoryRouter>
+    </NavbarProvider>
   );
 }
 
 function renderAsCreator() {
   lobbyEventHandler = null;
   return render(
-    <MemoryRouter>
-      <Lobby user={{ userDetails: 'creator@example.com' }} />
-    </MemoryRouter>
+    <NavbarProvider>
+      <MemoryRouter>
+        <NavbarCenterSlot />
+        <Lobby user={{ userDetails: 'creator@example.com' }} />
+      </MemoryRouter>
+    </NavbarProvider>
   );
 }
 

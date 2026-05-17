@@ -3,10 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useSignalR } from '../hooks/useSignalR';
 import { useCampaign } from '../hooks/useCampaign';
+import { useNavbar } from '../context/NavbarContext';
 
 export default function Lobby({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
+  const { setCenterContent } = useNavbar();
 
   const { campaign, players, storyState, loading, refresh } = useCampaign(campaignId);
   const [messages, setMessages] = useState([]);
@@ -119,6 +121,19 @@ export default function Lobby({ user, isAdmin }) {
   const myEmail = user?.userDetails;
   const iAmAdmin = isAdmin ? isAdmin(campaign) : creatorEmails.includes(myEmail);
 
+  useEffect(() => {
+    setCenterContent(
+      <button
+        className="btn btn-sm"
+        style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+        onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
+      >
+        {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
+      </button>
+    );
+    return () => setCenterContent(null);
+  }, [iAmAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
 
   return (
@@ -140,17 +155,7 @@ export default function Lobby({ user, isAdmin }) {
 
       {/* Header */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>← Dashboard</button>
-          <h1 style={{ margin: 0, flex: 1 }}>{campaign?.name}</h1>
-          <button
-            className="btn btn-sm"
-            style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
-            onClick={() => setConfirmAction(iAmAdmin ? 'cancel' : 'leave')}
-          >
-            {iAmAdmin ? 'Cancel Campaign' : 'Leave Campaign'}
-          </button>
-        </div>
+        <h1 style={{ marginBottom: 4 }}>{campaign?.name}</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
           {campaign?.party_name} · Waiting for adventurers to gather
         </p>

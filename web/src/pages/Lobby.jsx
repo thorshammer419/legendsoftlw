@@ -53,15 +53,26 @@ export default function Lobby({ user, isAdmin }) {
     }
   }, [campaign, navigate, campaignId]);
 
-  // Load chat history on mount
+  // Load chat history on mount + poll every 5s as SignalR fallback.
+  // Full replace with history on each cycle; preserves any optimistic
+  // in-flight messages (sends not yet persisted) at the end of the list.
   useEffect(() => {
     if (!campaignId) return;
-    api.getLobbyChatHistory(campaignId)
-      .then(({ messages: history }) => {
-        setMessages(history);
-        history.forEach((m) => { if (m.message_id) seenIds.current.add(m.message_id); });
-      })
-      .catch(() => {});
+    function loadHistory() {
+      api.getLobbyChatHistory(campaignId)
+        .then(({ messages: history }) => {
+          const historyIds = new Set(history.map((m) => m.message_id).filter(Boolean));
+          history.forEach((m) => { if (m.message_id) seenIds.current.add(m.message_id); });
+          setMessages((prev) => {
+            const inFlight = prev.filter((m) => m.optimistic && m.message_id && !historyIds.has(m.message_id));
+            return [...history, ...inFlight];
+          });
+        })
+        .catch(() => {});
+    }
+    loadHistory();
+    const id = setInterval(loadHistory, 5000);
+    return () => clearInterval(id);
   }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll chat to bottom

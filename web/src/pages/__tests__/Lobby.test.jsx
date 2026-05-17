@@ -340,16 +340,49 @@ describe('"You:" label for own messages', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Polling fallback — refresh is called on interval
+// Polling fallback — campaign refresh + chat history re-poll
 // ---------------------------------------------------------------------------
 
 describe('Polling fallback', () => {
-  test('calls refresh every 5 seconds', () => {
+  test('calls campaign refresh every 5 seconds', () => {
     jest.useFakeTimers();
     renderAsPlayer();
     const callsBefore = mockCampaignState.refresh.mock.calls.length;
     act(() => jest.advanceTimersByTime(5000));
     expect(mockCampaignState.refresh.mock.calls.length).toBeGreaterThan(callsBefore);
+    jest.useRealTimers();
+  });
+
+  test('re-polls chat history every 5 seconds to catch missed SignalR messages', async () => {
+    jest.useFakeTimers();
+    // Initial load returns one message
+    api.getLobbyChatHistory.mockResolvedValueOnce({
+      messages: [{ message_id: 'm1', type: 'chat', display_name: 'Aria', text: 'First', timestamp: '2025-01-01T10:00:00Z' }],
+    });
+    // Second poll returns a new message that was missed by SignalR
+    api.getLobbyChatHistory.mockResolvedValueOnce({
+      messages: [
+        { message_id: 'm1', type: 'chat', display_name: 'Aria', text: 'First', timestamp: '2025-01-01T10:00:00Z' },
+        { message_id: 'm2', type: 'chat', display_name: 'Bard', text: 'Missed message', timestamp: '2025-01-01T10:01:00Z' },
+      ],
+    });
+    renderAsPlayer();
+    // Let initial load resolve
+    await act(async () => { await Promise.resolve(); });
+    // Advance to trigger the poll
+    await act(async () => { jest.advanceTimersByTime(5000); await Promise.resolve(); });
+    expect(screen.getByText('Missed message')).toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
+  test('polling does not duplicate messages already shown', async () => {
+    jest.useFakeTimers();
+    const msg = { message_id: 'dup1', type: 'chat', display_name: 'Aria', text: 'Only once', timestamp: '2025-01-01T10:00:00Z' };
+    api.getLobbyChatHistory.mockResolvedValue({ messages: [msg] });
+    renderAsPlayer();
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { jest.advanceTimersByTime(5000); await Promise.resolve(); });
+    expect(screen.getAllByText('Only once')).toHaveLength(1);
     jest.useRealTimers();
   });
 });

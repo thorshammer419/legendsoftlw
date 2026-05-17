@@ -349,13 +349,18 @@ export default function Admin({ user, isAdmin }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {allowedUsers.map((u) => (
                   <div key={u.email} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    display: 'flex', alignItems: 'center', gap: 8,
                     padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)',
+                    overflow: 'hidden',
                   }}>
-                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{u.email}</span>
+                    <span style={{
+                      fontSize: 13, color: 'var(--text-primary)',
+                      flex: 1, minWidth: 0,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }} title={u.email}>{u.email}</span>
                     <button
                       className="btn btn-sm"
-                      style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '2px 10px' }}
+                      style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '2px 10px', flexShrink: 0 }}
                       onClick={() => removeAllowedUser(u.email)}
                       disabled={allowlistWorking}
                     >

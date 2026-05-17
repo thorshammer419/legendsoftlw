@@ -103,7 +103,7 @@ export default function CharacterCreate({ user }) {
     const totalSteps = iAmCreator ? 3 : 2;
     const currentStep = iAmCreator ? 2 : 1;
     setCenterContent(
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Step {currentStep} of {totalSteps}</span>
         <button
           className="btn btn-sm"

@@ -125,7 +125,7 @@ export default function Lobby({ user, isAdmin }) {
     const totalSteps = iAmAdmin ? 3 : 2;
     const currentStep = iAmAdmin ? 3 : 2;
     setCenterContent(
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Step {currentStep} of {totalSteps}</span>
         <button
           className="btn btn-sm"

@@ -160,6 +160,16 @@ async def lobby_presence(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.lobby_presence_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/reroll-request", methods=["POST"])
+async def reroll_request(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.reroll_request_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/reroll-response", methods=["POST"])
+async def reroll_response(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.reroll_response_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}", methods=["DELETE"])
 async def delete_campaign(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.delete_campaign_handler(req)

@@ -79,9 +79,9 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Issue #64 — Standard Array picker UI (chip-based assignment in CharacterCreate step 2): chips show from campaign rules (fallback [15,14,13,12,10,8]); click slot → aria-pressed focus; click chip → assigns to focused slot; click assigned slot → unassigns; save button disabled until all 6 filled; `character_name` label gets `htmlFor` for a11y. 7 new frontend tests (261 Python / 155 JS total).
 - [x] Issue #65 — Point Buy picker UI: +/− buttons per ability (8–15); SRD non-linear cost table; live "pts left" counter; + disabled at budget limit or score 15; − disabled at 8; save enabled at all times (budget enforced via button disabling); `isComplete` always true for point_buy in engine. 9 new frontend tests (261 Python / 164 JS total).
 - [x] Issue #66 — Roll for Stats picker — roll + assign phase: Roll All + individual Roll buttons; dice display (kept=gold, dropped=line-through); transitions to chip-assign UI after all 6 rolled; same assign/unassign pattern as Standard Array; save locked until all 6 placed; `isValid` logic unified across all three methods in engine. 8 new frontend tests (261 Python / 172 JS total).
+- [x] Issue #67 — Reroll request/response + approval card: two stateless endpoints (`POST /reroll-request` + `POST /reroll-response`); `useRerollApproval` hook (idle→pending→approved/denied, 60s timeout); non-creator chips show Request Reroll/Pending/Denied; creator chips show plain Reroll (no approval); global floating approval card in AppShell via NavbarContext `pendingRerollRequest`; `rerolled` flag set via `engine.markRerolled` on approval. 8 new backend tests + 8 new hook tests + 4 new frontend tests (269 Python / 184 JS total).
 
 ## Immediate Next Steps
-- Issue #67: Reroll request/approval card
 - Issue #68: 🎲 rerolled badge in lobby
 - Issue #67: Reroll request/approval card
 - Issue #68: 🎲 rerolled badge in lobby

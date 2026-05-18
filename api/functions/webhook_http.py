@@ -929,3 +929,59 @@ async def generate_campaign_field_handler(req: func.HttpRequest) -> func.HttpRes
         return _error(f"Generation failed: {e}", 500)
 
     return _json_response({"value": value})
+
+
+async def reroll_request_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp or cp.get("status") != "active":
+        return _error("Not an active player in this campaign", 403)
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    old_value = body.get("old_value")
+    player = get_player(email)
+    display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
+
+    broadcast_lobby_event({
+        "type": "reroll_request",
+        "campaign_id": campaign_id,
+        "player_email": email,
+        "player_display_name": display_name,
+        "old_value": old_value,
+    })
+    return _json_response({"status": "requested"})
+
+
+async def reroll_response_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    campaign = get_campaign(campaign_id)
+    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
+        return _error("Only campaign creators can respond to reroll requests", 403)
+
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    player_email = body.get("player_email")
+    approved = bool(body.get("approved"))
+
+    broadcast_lobby_event({
+        "type": "reroll_response",
+        "campaign_id": campaign_id,
+        "player_email": player_email,
+        "approved": approved,
+    })
+    return _json_response({"status": "responded"})

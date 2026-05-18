@@ -80,6 +80,16 @@ export const api = {
     );
     navigator.sendBeacon(`/api/campaigns/${campaignId}/lobby/presence`, blob);
   },
+  rerollRequest: (campaignId, body) =>
+    req(`/campaigns/${campaignId}/reroll-request`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  rerollResponse: (campaignId, body) =>
+    req(`/campaigns/${campaignId}/reroll-response`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   launchCampaign: (campaignId) =>
     req(`/campaigns/${campaignId}/lobby/launch`, { method: 'POST' }),
   deleteCampaign: (campaignId) =>

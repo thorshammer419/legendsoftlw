@@ -18,6 +18,7 @@ jest.mock('../../services/api', () => ({
     saveCharacter: jest.fn(),
     leaveCampaign: jest.fn(),
     deleteCampaign: jest.fn(),
+    rerollRequest: jest.fn(),
   },
 }));
 
@@ -33,12 +34,15 @@ jest.mock('../../components/character/ClassDiePicker', () =>
   }
 );
 
-let lobbyEventHandler = null;
+let mockLobbyEventHandlers = [];
 jest.mock('../../hooks/useSignalR', () => ({
   useSignalR: (_campaignId, handlers) => {
-    lobbyEventHandler = handlers.onLobbyEvent;
+    if (handlers?.onLobbyEvent) mockLobbyEventHandlers.push(handlers.onLobbyEvent);
   },
 }));
+function mockFireLobbyEvent(event) {
+  mockLobbyEventHandlers.forEach((h) => h(event));
+}
 
 function NavbarCenterSlot() {
   const { centerContent } = useNavbar();
@@ -46,7 +50,7 @@ function NavbarCenterSlot() {
 }
 
 function renderPage() {
-  lobbyEventHandler = null;
+  mockLobbyEventHandlers = [];
   return render(
     <NavbarProvider>
       <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
@@ -60,7 +64,7 @@ function renderPage() {
 }
 
 function renderPageAsCreator() {
-  lobbyEventHandler = null;
+  mockLobbyEventHandlers = [];
   return render(
     <NavbarProvider>
       <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
@@ -76,7 +80,7 @@ function renderPageAsCreator() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockNavigate.mockReset();
-  lobbyEventHandler = null;
+  mockLobbyEventHandlers = [];
 })
 
 // ---------------------------------------------------------------------------
@@ -502,6 +506,58 @@ describe('Roll for Stats picker', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Reroll buttons in Roll for Stats assign phase
+// ---------------------------------------------------------------------------
+
+async function goToAssignPhase(user) {
+  api.getCampaign.mockResolvedValue(ROLL_CAMPAIGN);
+  rollDice.mockReturnValue(FIXED_ROLL);
+  renderPage();
+  await goToStep2(user);
+  const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+  for (const btn of rollBtns) await user.click(btn);
+}
+
+describe('Reroll controls — Roll for Stats assign phase', () => {
+  beforeEach(() => {
+    api.rerollRequest.mockResolvedValue({});
+  });
+
+  test('non-creator chips show "Request Reroll" button', async () => {
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    expect(screen.getAllByRole('button', { name: /request reroll/i }).length).toBeGreaterThan(0);
+  });
+
+  test('creator chips show "Reroll" button (no approval)', async () => {
+    api.getCampaign.mockResolvedValue({ ...ROLL_CAMPAIGN, creator_emails: ['player@example.com'] });
+    rollDice.mockReturnValue(FIXED_ROLL);
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    expect(screen.getAllByRole('button', { name: /^reroll$/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /request reroll/i })).not.toBeInTheDocument();
+  });
+
+  test('clicking Request Reroll sets button to pending', async () => {
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    expect(screen.getAllByRole('button', { name: /pending approval/i }).length).toBeGreaterThan(0);
+  });
+
+  test('denied response shows Denied message', async () => {
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    act(() => mockFireLobbyEvent({ type: 'reroll_response', player_email: 'player@example.com', approved: false }));
+    expect(screen.getAllByRole('button', { name: /denied/i }).length).toBeGreaterThan(0);
+  });
+});
+
 describe('SignalR campaign_deleted in CharacterCreate', () => {
   beforeEach(() => {
     api.getCampaign.mockResolvedValue({
@@ -512,8 +568,8 @@ describe('SignalR campaign_deleted in CharacterCreate', () => {
 
   test('campaign_deleted event navigates to Dashboard', async () => {
     renderPage();
-    await waitFor(() => expect(lobbyEventHandler).not.toBeNull());
-    act(() => lobbyEventHandler({ type: 'campaign_deleted' }));
+    await waitFor(() => expect(mockLobbyEventHandlers.length).toBeGreaterThan(0));
+    act(() => mockFireLobbyEvent({ type: 'campaign_deleted' }));
     expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
   });
 });

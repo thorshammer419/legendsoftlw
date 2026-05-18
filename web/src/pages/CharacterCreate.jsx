@@ -5,6 +5,7 @@ import ClassDiePicker from '../components/character/ClassDiePicker';
 import { useSignalR } from '../hooks/useSignalR';
 import { useNavbar } from '../context/NavbarContext';
 import { useAbilityScoreEngine } from '../hooks/useAbilityScoreEngine';
+import { useRerollApproval } from '../hooks/useRerollApproval';
 import { rollDice } from '../utils/diceRoller';
 
 const RACES = [
@@ -154,11 +155,28 @@ export default function CharacterCreate({ user }) {
     return () => setCenterContent(null);
   }, [iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const { setPendingRerollRequest } = useNavbar();
+
   useSignalR(campaignId, {
     onLobbyEvent: (event) => {
       if (event.type === 'campaign_deleted') {
         navigate('/', { replace: true });
       }
+      if (event.type === 'reroll_request' && iAmCreator) {
+        setPendingRerollRequest({ ...event, campaignId });
+      }
+    },
+  });
+
+  const reroll = useRerollApproval({
+    campaignId,
+    myEmail,
+    onApproved: (oldValue) => {
+      const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
+      engine.rerollChip(oldValue, result);
+      engine.markRerolled(
+        ABILITY_KEYS.find((k) => engine.scores[k] === oldValue) ?? ABILITY_KEYS[0]
+      );
     },
   });
 
@@ -520,24 +538,52 @@ export default function CharacterCreate({ user }) {
                     </p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {engine.availableChips.map((chip, i) => (
-                        <button
-                          key={`${chip}-${i}`}
-                          onClick={() => {
-                            if (selectedSlot) {
-                              engine.assign(selectedSlot, chip);
-                              setSelectedSlot(null);
-                            }
-                          }}
-                          style={{
-                            padding: '6px 14px', borderRadius: 6,
-                            border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
-                            background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
-                            color: 'var(--text-primary)', fontWeight: 700, fontSize: 16,
-                            cursor: selectedSlot ? 'pointer' : 'default',
-                          }}
-                        >
-                          {chip}
-                        </button>
+                        <div key={`${chip}-${i}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <button
+                            onClick={() => {
+                              if (selectedSlot) {
+                                engine.assign(selectedSlot, chip);
+                                setSelectedSlot(null);
+                              }
+                            }}
+                            style={{
+                              padding: '6px 14px', borderRadius: 6,
+                              border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
+                              background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
+                              color: 'var(--text-primary)', fontWeight: 700, fontSize: 16,
+                              cursor: selectedSlot ? 'pointer' : 'default',
+                            }}
+                          >
+                            {chip}
+                          </button>
+                          {/* Reroll control under each chip */}
+                          {iAmCreator ? (
+                            <button
+                              className="btn btn-sm"
+                              style={{ fontSize: 10, padding: '2px 6px' }}
+                              onClick={() => {
+                                const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
+                                engine.rerollChip(chip, result);
+                              }}
+                            >
+                              Reroll
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-sm"
+                              style={{ fontSize: 10, padding: '2px 6px' }}
+                              disabled={reroll.status === 'pending'}
+                              onClick={() => {
+                                if (reroll.status === 'denied') { reroll.clearDenied(); return; }
+                                reroll.requestReroll(chip);
+                              }}
+                            >
+                              {reroll.status === 'pending' ? 'Pending approval…'
+                                : reroll.status === 'denied' ? 'Denied — request again'
+                                : 'Request Reroll'}
+                            </button>
+                          )}
+                        </div>
                       ))}
                       {engine.availableChips.length === 0 && (
                         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All values assigned</span>

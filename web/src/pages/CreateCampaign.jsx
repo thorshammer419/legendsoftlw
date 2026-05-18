@@ -15,7 +15,7 @@ const TIMEZONES = [
 const ABILITY_SCORE_METHODS = [
   { value: 'standard_array', label: 'Standard Array', description: 'Assign the fixed values 15, 14, 13, 12, 10, 8' },
   { value: 'point_buy', label: 'Point Buy', description: 'Spend 27 points; scores range 8–15' },
-  { value: 'roll', label: 'Roll for Stats', description: 'Roll 4d6 drop lowest for each score' },
+  { value: 'roll_for_stats', label: 'Roll for Stats', description: 'Roll 4d6 drop lowest for each score' },
 ];
 
 const DEFAULTS = {
@@ -29,6 +29,8 @@ const DEFAULTS = {
   ability_score_rules: {
     standard_array: [15, 14, 13, 12, 10, 8],
     point_buy_points: 27,
+    point_buy_min: 8,
+    point_buy_max: 15,
     roll_dice: 4,
     roll_keep: 3,
   },
@@ -60,45 +62,76 @@ function StandardArraySettings({ rules, setRules }) {
     <div style={SUBSETTING_STYLE}>
       <label className="label" style={{ margin: 0 }}>Array Values</label>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {arr.map((val, i) => {
-          const outOfRange = val < 3 || val > 18;
-          return (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <input
-                type="number"
-                value={val}
-                onChange={(e) => {
-                  const next = [...arr];
-                  next[i] = Number(e.target.value) || 0;
-                  setRules('standard_array', next);
-                }}
-                style={{ width: 48, textAlign: 'center' }}
-                aria-label={`Array value ${i + 1}`}
-              />
-              {outOfRange && (
-                <span style={{ fontSize: 10, color: 'var(--danger)' }}>3–18</span>
-              )}
-            </div>
-          );
-        })}
+        {arr.map((val, i) => (
+          <input
+            key={i}
+            type="number"
+            min={1}
+            max={20}
+            value={val}
+            onChange={(e) => {
+              const next = [...arr];
+              next[i] = Math.min(20, Math.max(1, Number(e.target.value) || 1));
+              setRules('standard_array', next);
+            }}
+            style={{ width: 48, textAlign: 'center' }}
+            aria-label={`Array value ${i + 1}`}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
 function PointBuySettings({ rules, setRules }) {
+  const minScore = rules.point_buy_min ?? 8;
+  const maxScore = rules.point_buy_max ?? 15;
   return (
     <div style={SUBSETTING_STYLE}>
-      <label className="label" style={{ margin: 0 }}>Point Budget</label>
-      <input
-        type="number"
-        min={1}
-        max={72}
-        value={rules.point_buy_points}
-        onChange={(e) => setRules('point_buy_points', Math.min(72, Math.max(1, Number(e.target.value) || 1)))}
-        style={{ width: 80 }}
-        aria-label="Point buy budget"
-      />
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <label className="label" style={{ margin: '0 0 4px' }}>Point Budget</label>
+          <input
+            type="number"
+            min={1}
+            max={72}
+            value={rules.point_buy_points}
+            onChange={(e) => setRules('point_buy_points', Math.min(72, Math.max(1, Number(e.target.value) || 1)))}
+            style={{ width: 72 }}
+            aria-label="Point buy budget"
+          />
+        </div>
+        <div>
+          <label className="label" style={{ margin: '0 0 4px' }}>Min Score</label>
+          <input
+            type="number"
+            min={1}
+            max={maxScore - 1}
+            value={minScore}
+            onChange={(e) => {
+              const val = Math.min(maxScore - 1, Math.max(1, Number(e.target.value) || 1));
+              setRules('point_buy_min', val);
+            }}
+            style={{ width: 60 }}
+            aria-label="Point buy minimum score"
+          />
+        </div>
+        <div>
+          <label className="label" style={{ margin: '0 0 4px' }}>Max Score</label>
+          <input
+            type="number"
+            min={minScore + 1}
+            max={20}
+            value={maxScore}
+            onChange={(e) => {
+              const val = Math.min(20, Math.max(minScore + 1, Number(e.target.value) || (minScore + 1)));
+              setRules('point_buy_max', val);
+            }}
+            style={{ width: 60 }}
+            aria-label="Point buy maximum score"
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -372,7 +405,7 @@ export default function CreateCampaign() {
                   {form.ability_score_method === 'point_buy' && method.value === 'point_buy' && (
                     <PointBuySettings rules={form.ability_score_rules} setRules={setRules} />
                   )}
-                  {form.ability_score_method === 'roll' && method.value === 'roll' && (
+                  {form.ability_score_method === 'roll_for_stats' && method.value === 'roll_for_stats' && (
                     <RollSettings rules={form.ability_score_rules} setRules={setRules} />
                   )}
                 </div>

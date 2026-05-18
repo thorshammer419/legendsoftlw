@@ -63,7 +63,6 @@ function proficiencyBonus(level) {
 
 const INITIAL_SCORES = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
 
-const POINT_BUY_COSTS = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
 
 export default function CharacterCreate({ user }) {
   const { campaignId } = useParams();
@@ -432,7 +431,7 @@ export default function CharacterCreate({ user }) {
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                    Spend points to raise scores (8–15). Non-linear cost above 13.
+                    Spend points to raise scores ({engine.minScore}–{engine.maxScore}).
                   </p>
                   <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                     <span style={{ fontSize: 20, fontWeight: 700, color: engine.pointsRemaining >= 0 ? 'var(--gold)' : 'var(--danger)' }}>
@@ -444,11 +443,11 @@ export default function CharacterCreate({ user }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {ABILITY_KEYS.map((key) => {
-                    const displayScore = engine.scores[key] ?? 8;
+                    const displayScore = engine.scores[key] ?? engine.minScore;
                     const m = mod(displayScore);
-                    const costIncrement = (POINT_BUY_COSTS[displayScore + 1] ?? Infinity) - (POINT_BUY_COSTS[displayScore] ?? 0);
-                    const plusDisabled = displayScore >= 15 || engine.pointsRemaining < costIncrement;
-                    const minusDisabled = displayScore <= 8;
+                    const costIncrement = engine.pointBuyCostIncrement(displayScore);
+                    const plusDisabled = displayScore >= engine.maxScore || engine.pointsRemaining < costIncrement;
+                    const minusDisabled = displayScore <= engine.minScore;
                     return (
                       <div key={key} className="card" style={{ textAlign: 'center', padding: '10px 8px' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -472,7 +471,6 @@ export default function CharacterCreate({ user }) {
                         <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
                           {m >= 0 ? `+${m}` : m}
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>cost {POINT_BUY_COSTS[displayScore]}</div>
                       </div>
                     );
                   })}

@@ -189,18 +189,13 @@ describe('Standard Array sub-settings', () => {
     });
   });
 
-  test('warning appears when a value is outside 3–18', async () => {
+  test('values are clamped to 1–20 range', async () => {
     const user = userEvent.setup();
     renderPage();
     const first = screen.getByLabelText('Array value 1');
     await user.clear(first);
     await user.type(first, '20');
-    expect(screen.getByText('3–18')).toBeInTheDocument();
-  });
-
-  test('no warning when all values are within 3–18', () => {
-    renderPage();
-    expect(screen.queryByText('3–18')).not.toBeInTheDocument();
+    expect(first.value).toBe('20');
   });
 });
 

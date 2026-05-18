@@ -2,7 +2,19 @@ import { useState, useCallback } from 'react';
 
 const ABILITY_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 
-const POINT_BUY_COSTS = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+// SRD costs for scores 8–15; extended below 8 (each step refunds 1pt)
+// and above 15 (each step costs 2 more, following the 13→14→15 pattern).
+const SRD_COSTS = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+
+function pointBuyCost(score) {
+  if (score <= 8) return score - 8; // 0 at 8, negative below
+  if (score <= 15) return SRD_COSTS[score];
+  return SRD_COSTS[15] + (score - 15) * 2; // 2 pts per step above 15
+}
+
+function pointBuyCostIncrement(score) {
+  return pointBuyCost(score + 1) - pointBuyCost(score);
+}
 
 const NULL_SCORES = Object.fromEntries(ABILITY_KEYS.map((k) => [k, null]));
 
@@ -44,14 +56,17 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
   }, []);
 
   // ── Point Buy: nudge a score up or down by delta ──────────────────────────
+  const minScore = rules.point_buy_min ?? 8;
+  const maxScore = rules.point_buy_max ?? 15;
+
   const adjustScore = useCallback((ability, delta) => {
     setScores((prev) => {
-      const current = prev[ability] ?? 8;
+      const current = prev[ability] ?? minScore;
       const next = current + delta;
-      if (next < 8 || next > 15) return prev;
+      if (next < minScore || next > maxScore) return prev;
       return { ...prev, [ability]: next };
     });
-  }, []);
+  }, [minScore, maxScore]);
 
   // ── Roll for Stats: record a new roll result, add chip ───────────────────
   const recordRoll = useCallback((rollResult) => {
@@ -96,8 +111,8 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
   if (method === 'point_buy') {
     const budget = rules.point_buy_points ?? 27;
     const spent = ABILITY_KEYS.reduce((sum, k) => {
-      const s = scores[k] ?? 8;
-      return sum + (POINT_BUY_COSTS[s] ?? 0);
+      const s = scores[k] ?? minScore;
+      return sum + pointBuyCost(s) - pointBuyCost(minScore);
     }, 0);
     pointsRemaining = budget - spent;
     isValid = isComplete && pointsRemaining >= 0;
@@ -119,6 +134,9 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
     isComplete,
     isValid,
     validationMessage,
+    minScore,
+    maxScore,
+    pointBuyCostIncrement,
     assign,
     unassign,
     adjustScore,

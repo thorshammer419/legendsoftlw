@@ -87,7 +87,8 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
 
   // ── Derived values ────────────────────────────────────────────────────────
   const assigned = ABILITY_KEYS.filter((k) => scores[k] !== null);
-  const isComplete = assigned.length === 6;
+  // Point buy: all scores effectively set (null → 8), so always complete
+  const isComplete = method === 'point_buy' || assigned.length === 6;
 
   let pointsRemaining = null;
   let isValid = isComplete;

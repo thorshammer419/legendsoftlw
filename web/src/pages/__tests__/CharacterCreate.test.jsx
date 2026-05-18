@@ -306,6 +306,103 @@ describe('Standard Array picker', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Point Buy picker — step 2
+// ---------------------------------------------------------------------------
+
+const PB_CAMPAIGN = {
+  max_starting_level: 1,
+  creator_emails: [],
+  ability_score_method: 'point_buy',
+  ability_score_rules: { point_buy_points: 27 },
+};
+
+describe('Point Buy picker', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(PB_CAMPAIGN);
+  });
+
+  test('step 2 shows +/− controls when method is point_buy', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /increase strength/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /decrease strength/i })).toBeInTheDocument();
+  });
+
+  test('all scores start at 8', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getAllByText('8')).toHaveLength(6);
+  });
+
+  test('remaining budget is displayed', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByText('27')).toBeInTheDocument();
+  });
+
+  test('clicking + increases score and reduces budget', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /increase strength/i }));
+    expect(screen.getByText('26')).toBeInTheDocument(); // budget reduced by 1
+    expect(screen.getAllByText('8')).toHaveLength(5);   // 5 scores still at 8
+  });
+
+  test('clicking − decreases score and restores budget', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /increase strength/i }));
+    await user.click(screen.getByRole('button', { name: /decrease strength/i }));
+    expect(screen.getByText('27')).toBeInTheDocument(); // budget restored
+  });
+
+  test('− button disabled when score is 8', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /decrease strength/i })).toBeDisabled();
+  });
+
+  test('+ button disabled when score is 15', async () => {
+    const user = userEvent.setup();
+    api.getCampaign.mockResolvedValue({
+      ...PB_CAMPAIGN,
+      ability_score_rules: { point_buy_points: 99 }, // plenty of points
+    });
+    renderPage();
+    await goToStep2(user);
+    // Raise STR from 8 to 15 (costs 9 points)
+    for (let i = 0; i < 7; i++) {
+      await user.click(screen.getByRole('button', { name: /increase strength/i }));
+    }
+    expect(screen.getByRole('button', { name: /increase strength/i })).toBeDisabled();
+  });
+
+  test('+ button disabled when increase would exceed budget', async () => {
+    const user = userEvent.setup();
+    api.getCampaign.mockResolvedValue({
+      ...PB_CAMPAIGN,
+      ability_score_rules: { point_buy_points: 0 }, // no budget
+    });
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /increase strength/i })).toBeDisabled();
+  });
+
+  test('save button enabled when within budget', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled();
+  });
+});
+
 describe('SignalR campaign_deleted in CharacterCreate', () => {
   beforeEach(() => {
     api.getCampaign.mockResolvedValue({

@@ -4,6 +4,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import CharacterCreate from '../CharacterCreate';
 import { api } from '../../services/api';
 import { NavbarProvider, useNavbar } from '../../context/NavbarContext';
+import { rollDice } from '../../utils/diceRoller';
+
+jest.mock('../../utils/diceRoller', () => ({
+  rollDice: jest.fn(),
+}));
 
 const mockNavigate = jest.fn();
 
@@ -400,6 +405,100 @@ describe('Point Buy picker', () => {
     renderPage();
     await goToStep2(user);
     expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Roll for Stats picker — step 2
+// ---------------------------------------------------------------------------
+
+const ROLL_CAMPAIGN = {
+  max_starting_level: 1,
+  creator_emails: [],
+  ability_score_method: 'roll_for_stats',
+  ability_score_rules: { roll_dice: 4, roll_keep: 3 },
+};
+
+const FIXED_ROLL = { rolls: [6, 5, 4, 1], kept: [6, 5, 4], dropped: [1], sum: 15 };
+
+describe('Roll for Stats picker', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(ROLL_CAMPAIGN);
+    rollDice.mockReturnValue(FIXED_ROLL);
+  });
+
+  test('step 2 shows Roll All and individual Roll buttons', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /roll all/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^roll$/i })).toHaveLength(6);
+  });
+
+  test('Roll All is disabled once any score has been rolled', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getAllByRole('button', { name: /^roll$/i })[0]);
+    expect(screen.getByRole('button', { name: /roll all/i })).toBeDisabled();
+  });
+
+  test('rolling a slot shows the dice result and removes its Roll button', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getAllByRole('button', { name: /^roll$/i })[0]);
+    expect(screen.getAllByRole('button', { name: /^roll$/i })).toHaveLength(5);
+    expect(screen.getByText('= 15')).toBeInTheDocument();
+  });
+
+  test('kept dice are shown with gold styling, dropped dice are crossed out', async () => {
+    rollDice.mockReturnValue({ rolls: [6, 5, 4, 1], kept: [6, 5, 4], dropped: [1], sum: 15 });
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getAllByRole('button', { name: /^roll$/i })[0]);
+    // dice sorted descending: 6,5,4 kept (gold), 1 dropped (line-through)
+    const dice = document.querySelectorAll('[style*="line-through"]');
+    expect(dice.length).toBeGreaterThan(0);
+  });
+
+  test('after all 6 rolled, transitions to chip assign phase', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    expect(screen.queryByRole('button', { name: /^roll$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /roll all/i })).not.toBeInTheDocument();
+  });
+
+  test('assign phase: clicking a slot then a chip assigns it', async () => {
+    rollDice.mockReturnValue({ rolls: [5, 4, 3, 1], kept: [5, 4, 3], dropped: [1], sum: 12 });
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    await user.click(screen.getByRole('button', { name: /^STR/i }));
+    await user.click(screen.getAllByRole('button', { name: '12' })[0]);
+    expect(screen.getByRole('button', { name: /^STR/i })).toHaveTextContent('12');
+  });
+
+  test('save button disabled during roll phase', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /enter the adventure/i })).toBeDisabled();
+  });
+
+  test('save button disabled in assign phase until all placed', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    expect(screen.getByRole('button', { name: /enter the adventure/i })).toBeDisabled();
   });
 });
 

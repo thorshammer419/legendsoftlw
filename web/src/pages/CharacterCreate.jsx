@@ -5,6 +5,7 @@ import ClassDiePicker from '../components/character/ClassDiePicker';
 import { useSignalR } from '../hooks/useSignalR';
 import { useNavbar } from '../context/NavbarContext';
 import { useAbilityScoreEngine } from '../hooks/useAbilityScoreEngine';
+import { rollDice } from '../utils/diceRoller';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -98,9 +99,26 @@ export default function CharacterCreate({ user }) {
 
   const isStandardArray = abilityScoreMethod === 'standard_array' || !abilityScoreMethod;
   const isPointBuy = abilityScoreMethod === 'point_buy';
-  const activeScores = (isStandardArray || isPointBuy)
+  const isRollForStats = abilityScoreMethod === 'roll_for_stats';
+  const useEngine = isStandardArray || isPointBuy || isRollForStats;
+  const activeScores = useEngine
     ? Object.fromEntries(ABILITY_KEYS.map((k) => [k, engine.scores[k] ?? (isPointBuy ? 8 : 10)]))
     : scores;
+
+  const rollDiceCount = abilityScoreRules.roll_dice ?? 4;
+  const rollKeepCount = abilityScoreRules.roll_keep ?? 3;
+
+  const doRoll = () => {
+    const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
+    engine.recordRoll(result);
+  };
+
+  const doRollAll = async () => {
+    for (let i = 0; i < 6; i++) {
+      doRoll();
+      if (i < 5) await new Promise((r) => setTimeout(r, 150));
+    }
+  };
 
   useEffect(() => {
     api.getCampaign(campaignId)
@@ -439,6 +457,128 @@ export default function CharacterCreate({ user }) {
                   })}
                 </div>
               </>
+            ) : isRollForStats ? (
+              <>
+                {engine.rollResults.length < 6 ? (
+                  /* ── Roll phase ── */
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                      Roll {rollDiceCount}d6, keep highest {rollKeepCount}. Roll each slot individually or all at once.
+                    </p>
+                    <button
+                      className="btn btn-secondary btn-full"
+                      onClick={doRollAll}
+                      disabled={engine.rollResults.length > 0}
+                    >
+                      Roll All
+                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {Array.from({ length: 6 }, (_, i) => {
+                        const result = engine.rollResults[i];
+                        const sortedDice = result ? [...result.rolls].sort((a, b) => b - a) : [];
+                        return (
+                          <div key={i} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 28, flexShrink: 0 }}>#{i + 1}</span>
+                            {result ? (
+                              <>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                  {sortedDice.map((die, j) => (
+                                    <span
+                                      key={j}
+                                      style={{
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        width: 26, height: 26, borderRadius: 4,
+                                        border: `1px solid ${j < rollKeepCount ? 'var(--gold)' : 'var(--border)'}`,
+                                        color: j < rollKeepCount ? 'var(--gold)' : 'var(--text-muted)',
+                                        textDecoration: j < rollKeepCount ? 'none' : 'line-through',
+                                        fontSize: 13, fontWeight: 600,
+                                      }}
+                                    >
+                                      {die}
+                                    </span>
+                                  ))}
+                                </div>
+                                <span style={{ marginLeft: 'auto', fontSize: 18, fontWeight: 700, color: 'var(--gold)' }}>
+                                  = {result.sum}
+                                </span>
+                              </>
+                            ) : (
+                              <button className="btn btn-sm btn-secondary" onClick={doRoll} style={{ marginLeft: 'auto' }}>
+                                Roll
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  /* ── Assign phase — identical to Standard Array chip UI ── */
+                  <>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                      All scores rolled! Click a slot, then click a value to assign it.
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {engine.availableChips.map((chip, i) => (
+                        <button
+                          key={`${chip}-${i}`}
+                          onClick={() => {
+                            if (selectedSlot) {
+                              engine.assign(selectedSlot, chip);
+                              setSelectedSlot(null);
+                            }
+                          }}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6,
+                            border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
+                            background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
+                            color: 'var(--text-primary)', fontWeight: 700, fontSize: 16,
+                            cursor: selectedSlot ? 'pointer' : 'default',
+                          }}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                      {engine.availableChips.length === 0 && (
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All values assigned</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {ABILITY_KEYS.map((key) => {
+                        const val = engine.scores[key];
+                        const isSelected = selectedSlot === key;
+                        const m = mod(val ?? 10);
+                        return (
+                          <button
+                            key={key}
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              if (val !== null) { engine.unassign(key); setSelectedSlot(null); }
+                              else { setSelectedSlot(isSelected ? null : key); }
+                            }}
+                            style={{
+                              textAlign: 'center', padding: '10px 8px',
+                              background: isSelected ? 'rgba(212,175,55,0.1)' : 'var(--card-bg)',
+                              border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`,
+                              borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'inherit',
+                            }}
+                          >
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                              {ABILITY_SHORT[key]}
+                            </div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: val !== null ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 27 }}>
+                              {val !== null ? val : '—'}
+                            </div>
+                            <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
+                              {val !== null ? (m >= 0 ? `+${m}` : m) : ''}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
             ) : (
               <>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
@@ -501,12 +641,8 @@ export default function CharacterCreate({ user }) {
           <button
             className="btn btn-primary btn-full"
             onClick={handleSubmit}
-            disabled={saving || (isStandardArray && !engine.isComplete) || (isPointBuy && !engine.isValid)}
-            title={
-              (isStandardArray && !engine.isComplete) ? 'Assign all ability scores to continue'
-              : (isPointBuy && !engine.isValid) ? engine.validationMessage
-              : undefined
-            }
+            disabled={saving || (useEngine && !engine.isValid)}
+            title={useEngine && !engine.isValid ? (engine.validationMessage || 'Complete ability scores to continue') : undefined}
           >
             {saving ? 'Saving character...' : 'Enter the Adventure →'}
           </button>

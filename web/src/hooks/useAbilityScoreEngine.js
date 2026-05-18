@@ -105,9 +105,10 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
     if (pointsRemaining < 0) validationMessage = `Over budget by ${-pointsRemaining} points`;
   } else if (method === 'standard_array') {
     isValid = isComplete && availableChips.length === 0;
+    if (!isValid) validationMessage = 'Assign all ability scores to continue';
   } else if (method === 'roll_for_stats') {
-    const needed = rules.roll_dice !== undefined ? 6 : 6;
-    isValid = isComplete && rollResults.length >= needed;
+    isValid = isComplete && rollResults.length >= 6;
+    if (!isValid) validationMessage = rollResults.length < 6 ? 'Roll all six scores first' : 'Assign all rolled scores to continue';
   }
 
   return {

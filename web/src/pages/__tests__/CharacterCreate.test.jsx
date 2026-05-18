@@ -573,3 +573,73 @@ describe('SignalR campaign_deleted in CharacterCreate', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Rerolled badge — hasRerolled flag in saveCharacter payload
+// ---------------------------------------------------------------------------
+
+// Helper: in assign phase, click each slot and assign the first available chip
+async function assignAllChipsInOrder(user) {
+  const abilityShorts = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+  // Chip values from FIXED_ROLL are all 15, but RTL string match is exact.
+  // Use aria-pressed=false slots, then click chip buttons (those that aren't
+  // Reroll/Request Reroll/Save/Leave/Cancel/Roll/Roll All).
+  for (const short of abilityShorts) {
+    await user.click(screen.getByRole('button', { name: new RegExp(`^${short}`) }));
+    // After clicking a slot, chip buttons show cursor:pointer — find first one
+    // by querying buttons with only digit text (accessible name is just a number)
+    const chipBtn = screen.getAllByRole('button').find(
+      (b) => /^\d+$/.test(b.textContent?.trim() ?? '')
+        && b.style.cursor === 'pointer'
+    );
+    await user.click(chipBtn);
+  }
+}
+
+describe('Rerolled flag in saveCharacter payload', () => {
+  beforeEach(() => {
+    api.saveCharacter.mockResolvedValue({});
+    api.rerollRequest.mockResolvedValue({});
+    rollDice.mockReturnValue(FIXED_ROLL);
+  });
+
+  test('payload does not include rerolled flag when no reroll happened', async () => {
+    // Use point_buy — save always enabled, no reroll occurs
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: [], ability_score_method: 'point_buy', ability_score_rules: { budget: 27 } });
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /enter the adventure/i }));
+    await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
+    const payload = api.saveCharacter.mock.calls[0][1];
+    expect(payload.rerolled).toBeFalsy();
+  });
+
+  test('creator reroll sets rerolled:true in payload', async () => {
+    api.getCampaign.mockResolvedValue({ ...ROLL_CAMPAIGN, creator_emails: ['player@example.com'] });
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    await user.click(screen.getAllByRole('button', { name: /^reroll$/i })[0]);
+    await assignAllChipsInOrder(user);
+    await user.click(screen.getByRole('button', { name: /enter the adventure/i }));
+    await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
+    const payload = api.saveCharacter.mock.calls[0][1];
+    expect(payload.rerolled).toBe(true);
+  });
+
+  test('approved reroll response sets rerolled:true in payload', async () => {
+    api.getCampaign.mockResolvedValue(ROLL_CAMPAIGN);
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    act(() => mockFireLobbyEvent({ type: 'reroll_response', player_email: 'player@example.com', approved: true }));
+    await assignAllChipsInOrder(user);
+    await user.click(screen.getByRole('button', { name: /enter the adventure/i }));
+    await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
+    const payload = api.saveCharacter.mock.calls[0][1];
+    expect(payload.rerolled).toBe(true);
+  });
+});

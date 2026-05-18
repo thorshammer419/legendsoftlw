@@ -269,7 +269,10 @@ export default function Lobby({ user, isAdmin }) {
                 }}>
                   {p.character_ready ? '✓' : '○'}
                 </span>
-                <span style={{ flex: 1, fontSize: 14 }}>{p.email.split('@')[0]}</span>
+                <span style={{ flex: 1, fontSize: 14 }}>
+                  {p.email.split('@')[0]}
+                  {p.rerolled && <span style={{ marginLeft: 4 }} title="Used a reroll">🎲</span>}
+                </span>
                 {p.role === 'creator' && (
                   <span style={{ fontSize: 11, color: 'var(--gold)', fontStyle: 'italic' }}>creator</span>
                 )}
@@ -301,7 +304,11 @@ export default function Lobby({ user, isAdmin }) {
                   <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>
                     {formatTime(m.timestamp)}
                   </span>
-                  <span style={{ color: classColor(m.char_class), fontWeight: 600 }}>{m.email === myEmail ? 'You' : m.display_name}: </span>
+                  <span style={{ color: classColor(m.char_class), fontWeight: 600 }}>
+                    {m.email === myEmail ? 'You' : m.display_name}
+                    {m.rerolled && <span style={{ marginLeft: 2 }}>🎲</span>}
+                    {': '}
+                  </span>
                   <span style={{ color: 'var(--text-primary)' }}>{m.text}</span>
                 </>
               )}

@@ -114,6 +114,24 @@ class TestLobbyMessagePost:
         assert broadcast_payload["char_class"] == "Ranger"
 
     @pytest.mark.asyncio
+    async def test_rerolled_flag_included_in_message_when_set(self):
+        from functions.webhook_http import lobby_message_handler
+        cp_rerolled = {**ACTIVE_CP, "rerolled": True}
+        with patch(f"{MODULE}.get_campaign_player", return_value=cp_rerolled):
+            req = _make_req({"text": "Test"})
+            await lobby_message_handler(req)
+        saved_msg = self.mock_append.call_args[0][1]
+        assert saved_msg.get("rerolled") is True
+
+    @pytest.mark.asyncio
+    async def test_rerolled_flag_absent_when_not_set(self):
+        from functions.webhook_http import lobby_message_handler
+        req = _make_req({"text": "Test"})
+        await lobby_message_handler(req)
+        saved_msg = self.mock_append.call_args[0][1]
+        assert "rerolled" not in saved_msg
+
+    @pytest.mark.asyncio
     async def test_non_active_player_gets_403(self):
         from functions.webhook_http import lobby_message_handler
         with patch(f"{MODULE}.get_campaign_player", return_value={"status": "inactive"}):

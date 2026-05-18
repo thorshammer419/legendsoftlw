@@ -560,6 +560,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
     char_class = cp.get("char_class") or None
+    rerolled = cp.get("rerolled", False)
     all_players = get_campaign_players(campaign_id)
     message_id = (body.get("message_id") or "").strip() or str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -573,6 +574,8 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
         "text": text,
         "timestamp": timestamp,
     }
+    if rerolled:
+        message["rerolled"] = True
     append_lobby_message(campaign_id, message)
 
     broadcast_lobby_event({

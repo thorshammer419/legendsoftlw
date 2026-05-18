@@ -79,6 +79,7 @@ export default function CharacterCreate({ user }) {
   const [abilityScoreRules, setAbilityScoreRules] = useState({ standard_array: [15, 14, 13, 12, 10, 8] });
   const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
   const [actioning, setActioning] = useState(false);
+  const [hasRerolled, setHasRerolled] = useState(false);
 
   const [identity, setIdentity] = useState({
     name: '',
@@ -177,6 +178,7 @@ export default function CharacterCreate({ user }) {
       engine.markRerolled(
         ABILITY_KEYS.find((k) => engine.scores[k] === oldValue) ?? ABILITY_KEYS[0]
       );
+      setHasRerolled(true);
     },
   });
 
@@ -234,6 +236,7 @@ export default function CharacterCreate({ user }) {
         spell_slots: {},
         known_spells: [],
         backstory: identity.backstory,
+        ...(hasRerolled && { rerolled: true }),
       };
       await api.saveCharacter(campaignId, character);
       navigate(`/campaigns/${campaignId}/lobby`);
@@ -564,6 +567,7 @@ export default function CharacterCreate({ user }) {
                               onClick={() => {
                                 const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
                                 engine.rerollChip(chip, result);
+                                setHasRerolled(true);
                               }}
                             >
                               Reroll

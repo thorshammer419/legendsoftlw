@@ -403,6 +403,30 @@ class TestSaveCharacter:
         saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
         assert saved_cp["char_class"] == "Wizard"
 
+    def test_stores_rerolled_flag_on_campaign_player(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = False
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        save_character(campaign_id, player_email, {"name": "Kira", "rerolled": True})
+
+        saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved_cp.get("rerolled") is True
+
+    def test_rerolled_flag_absent_when_not_sent(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = False
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        save_character(campaign_id, player_email, {"name": "Kira"})
+
+        saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert "rerolled" not in saved_cp
+
     def test_persists_character_with_correct_ids(
         self, cosmos_mocks, campaign_id, player_email, active_campaign_player
     ):

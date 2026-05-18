@@ -444,3 +444,45 @@ describe('Presence announcements', () => {
     expect(scrollArea).toHaveStyle('height: calc(50vh - 120px)');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Rerolled badge (🎲) in roster and chat
+// ---------------------------------------------------------------------------
+
+describe('Rerolled badge', () => {
+  test('shows 🎲 next to player name in roster when rerolled is true', () => {
+    mockCampaignState.players = [
+      { email: 'other@example.com', role: 'player', character_ready: true, rerolled: true },
+    ];
+    renderAsPlayer();
+    expect(screen.getByText(/🎲/)).toBeInTheDocument();
+  });
+
+  test('does not show 🎲 in roster when rerolled is false', () => {
+    mockCampaignState.players = [
+      { email: 'other@example.com', role: 'player', character_ready: true, rerolled: false },
+    ];
+    renderAsPlayer();
+    expect(screen.queryByText(/🎲/)).not.toBeInTheDocument();
+  });
+
+  test('shows 🎲 in chat next to sender name when message has rerolled:true', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [{ message_id: 'm1', type: 'chat', email: 'other@example.com', display_name: 'Other', char_class: null, text: 'Hi!', timestamp: '2024-01-01T00:00:00Z', rerolled: true }],
+    });
+    mockCampaignState.players = [];
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText(/Other/)).toBeInTheDocument());
+    expect(screen.getByText(/🎲/)).toBeInTheDocument();
+  });
+
+  test('does not show 🎲 in chat when message has no rerolled flag', async () => {
+    api.getLobbyChatHistory.mockResolvedValue({
+      messages: [{ message_id: 'm1', type: 'chat', email: 'other@example.com', display_name: 'Other', char_class: null, text: 'Hi!', timestamp: '2024-01-01T00:00:00Z' }],
+    });
+    mockCampaignState.players = [];
+    renderAsPlayer();
+    await waitFor(() => expect(screen.getByText(/Other/)).toBeInTheDocument());
+    expect(screen.queryByText(/🎲/)).not.toBeInTheDocument();
+  });
+});

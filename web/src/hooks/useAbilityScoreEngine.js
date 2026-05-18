@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const ABILITY_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 
@@ -31,13 +31,27 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
   const [rollResults, setRollResults] = useState([]);
   const [rerolledFlags, setRerolledFlags] = useState({});
 
+  // Reset all state when the method changes (e.g. API response arrives after default render)
+  useEffect(() => {
+    setScores({ ...NULL_SCORES });
+    setRollResults([]);
+    setRerolledFlags({});
+    setAvailableChips(
+      method === 'standard_array'
+        ? [...(rules.standard_array ?? [15, 14, 13, 12, 10, 8])]
+        : []
+    );
+  }, [method]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Standard Array & Roll: assign a chip value to an ability ──────────────
   const assign = useCallback((ability, value) => {
     setScores((prev) => {
       const old = prev[ability];
       const next = { ...prev, [ability]: value };
       setAvailableChips((chips) => {
-        let updated = chips.filter((c) => c !== value);
+        // Remove only the first occurrence (duplicate rolls can have the same sum)
+        const idx = chips.indexOf(value);
+        let updated = idx !== -1 ? [...chips.slice(0, idx), ...chips.slice(idx + 1)] : chips;
         if (old !== null) updated = [...updated, old].sort((a, b) => b - a);
         return updated;
       });

@@ -215,6 +215,97 @@ describe('Cancel/Leave Campaign button', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Standard Array picker — step 2
+// ---------------------------------------------------------------------------
+
+const SA_CAMPAIGN = {
+  max_starting_level: 1,
+  creator_emails: [],
+  ability_score_method: 'standard_array',
+  ability_score_rules: { standard_array: [15, 14, 13, 12, 10, 8] },
+};
+
+async function goToStep2(user) {
+  await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+  await user.type(screen.getByLabelText(/character name/i), 'Aldric');
+  await user.click(screen.getByRole('button', { name: /ability scores/i }));
+}
+
+describe('Standard Array picker', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+  });
+
+  test('step 2 shows chip values when method is standard_array', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: '15' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '8' })).toBeInTheDocument();
+  });
+
+  test('old campaign (no method) shows default chips [15,14,13,12,10,8]', async () => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: [] });
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    [15, 14, 13, 12, 10, 8].forEach((v) =>
+      expect(screen.getByRole('button', { name: String(v) })).toBeInTheDocument()
+    );
+  });
+
+  test('clicking an ability slot marks it as selected (aria-pressed)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /^STR/i }));
+    expect(screen.getByRole('button', { name: /^STR/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('clicking a chip when a slot is focused assigns it', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /^STR/i }));
+    await user.click(screen.getByRole('button', { name: '15' }));
+    expect(screen.queryByRole('button', { name: '15' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^STR/i })).toHaveTextContent('15');
+  });
+
+  test('clicking an assigned slot returns chip to pool', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    await user.click(screen.getByRole('button', { name: /^STR/i }));
+    await user.click(screen.getByRole('button', { name: '15' }));
+    await user.click(screen.getByRole('button', { name: /^STR/i }));
+    expect(screen.getByRole('button', { name: '15' })).toBeInTheDocument();
+  });
+
+  test('save button disabled until all 6 slots filled', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    expect(screen.getByRole('button', { name: /enter the adventure/i })).toBeDisabled();
+  });
+
+  test('save button enabled when all 6 assigned', async () => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.saveCharacter.mockResolvedValue({});
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const abilities = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+    const chips = [15, 14, 13, 12, 10, 8];
+    for (let i = 0; i < 6; i++) {
+      await user.click(screen.getByRole('button', { name: new RegExp(`^${abilities[i]}`) }));
+      await user.click(screen.getByRole('button', { name: String(chips[i]) }));
+    }
+    expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled();
+  });
+});
+
 describe('SignalR campaign_deleted in CharacterCreate', () => {
   beforeEach(() => {
     api.getCampaign.mockResolvedValue({

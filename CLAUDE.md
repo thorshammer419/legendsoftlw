@@ -76,9 +76,9 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Lobby presence announcements: join/leave system messages persisted to Cosmos and broadcast via SignalR; join format `"⚔ {display_name} has entered the lobby — {char_name}, {char_class}, level {level}"`; leave via `useEffect` cleanup + `navigator.sendBeacon` on tab close; 10-second rapid-rejoin suppression via `lobby-leave-announce` queue with visibility timeout (player rejoins within 10s → leave announcement dropped); join also suppressed when player was already "present" or left < 10s ago — prevents duplicate announcements on page refresh; presence doc (`presence_{campaignId}_{email}`) tracks current status + display_name; `POST /campaigns/{id}/lobby/presence` HTTP endpoint; `lobby-leave-announce` queue trigger; chat window resized to `calc(50vh - 120px)` with scrollbar. `enqueue` helper gains optional `visibility_timeout` param. 13 new domain tests + 15 new endpoint tests + 3 new frontend tests (261 Python / 128 JS total).
 
 - [x] Issue #63 — DiceRoller utility + useAbilityScoreEngine hook (TDD): `rollDice` pure function (`web/src/utils/diceRoller.js`); `useAbilityScoreEngine` hook covering Standard Array chip assignment, Point Buy point tracking, Roll for Stats chip generation, rerollChip, markRerolled. `crypto.getRandomValues` polyfill added to `setupTests.js`. 4 new DiceRoller tests + 16 new engine tests (261 Python / 148 JS total).
+- [x] Issue #64 — Standard Array picker UI (chip-based assignment in CharacterCreate step 2): chips show from campaign rules (fallback [15,14,13,12,10,8]); click slot → aria-pressed focus; click chip → assigns to focused slot; click assigned slot → unassigns; save button disabled until all 6 filled; `character_name` label gets `htmlFor` for a11y. 7 new frontend tests (261 Python / 155 JS total).
 
 ## Immediate Next Steps
-- Issue #64: Standard Array picker UI (chip-based assignment in CharacterCreate step 2)
 - Issue #65: Point Buy picker UI
 - Issue #66: Roll for Stats picker UI
 - Issue #67: Reroll request/approval card

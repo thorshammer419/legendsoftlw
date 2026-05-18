@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
 import { useSignalR } from '../hooks/useSignalR';
 import { useNavbar } from '../context/NavbarContext';
+import { useAbilityScoreEngine } from '../hooks/useAbilityScoreEngine';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -70,6 +71,8 @@ export default function CharacterCreate({ user }) {
   const [error, setError] = useState(null);
   const [maxLevel, setMaxLevel] = useState(null); // null = loading
   const [creatorEmails, setCreatorEmails] = useState([]);
+  const [abilityScoreMethod, setAbilityScoreMethod] = useState('standard_array');
+  const [abilityScoreRules, setAbilityScoreRules] = useState({ standard_array: [15, 14, 13, 12, 10, 8] });
   const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
   const [actioning, setActioning] = useState(false);
 
@@ -84,6 +87,17 @@ export default function CharacterCreate({ user }) {
   });
 
   const [scores, setScores] = useState(INITIAL_SCORES);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+
+  const engine = useAbilityScoreEngine({
+    ability_score_method: abilityScoreMethod,
+    ability_score_rules: abilityScoreRules,
+  });
+
+  const isStandardArray = abilityScoreMethod === 'standard_array' || !abilityScoreMethod;
+  const activeScores = isStandardArray
+    ? Object.fromEntries(ABILITY_KEYS.map((k) => [k, engine.scores[k] ?? 10]))
+    : scores;
 
   useEffect(() => {
     api.getCampaign(campaignId)
@@ -92,6 +106,8 @@ export default function CharacterCreate({ user }) {
         setMaxLevel(max);
         setCreatorEmails(c.creator_emails ?? []);
         setIdentity((i) => ({ ...i, level: max }));
+        setAbilityScoreMethod(c.ability_score_method ?? 'standard_array');
+        setAbilityScoreRules(c.ability_score_rules ?? { standard_array: [15, 14, 13, 12, 10, 8] });
       })
       .catch(() => setMaxLevel(20));
   }, [campaignId]);
@@ -142,8 +158,8 @@ export default function CharacterCreate({ user }) {
   };
 
   const selectedClass = CLASSES.find((c) => c.name === identity.class_name) || CLASSES[0];
-  const conMod = mod(scores.constitution);
-  const dexMod = mod(scores.dexterity);
+  const conMod = mod(activeScores.constitution);
+  const dexMod = mod(activeScores.dexterity);
   const level = Math.max(1, Math.min(maxLevel ?? 20, identity.level));
   const maxHp = selectedClass.hit_die + conMod;
   const baseAC = 10 + dexMod;
@@ -167,7 +183,7 @@ export default function CharacterCreate({ user }) {
         alignment: identity.alignment,
         level,
         proficiency_bonus: profBonus,
-        ability_scores: { ...scores },
+        ability_scores: { ...activeScores },
         max_hp: Math.max(1, maxHp),
         current_hp: Math.max(1, maxHp),
         temp_hp: 0,
@@ -220,8 +236,9 @@ export default function CharacterCreate({ user }) {
             <h3 style={{ margin: 0, color: 'var(--gold)' }}>Identity</h3>
 
             <div>
-              <label className="label">Character Name *</label>
+              <label className="label" htmlFor="character_name">Character Name *</label>
               <input
+                id="character_name"
                 type="text"
                 value={identity.name}
                 onChange={(e) => setIdentity((i) => ({ ...i, name: e.target.value }))}
@@ -290,33 +307,115 @@ export default function CharacterCreate({ user }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <h3 style={{ margin: 0, color: 'var(--gold)' }}>Ability Scores</h3>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              Standard array (15, 14, 13, 12, 10, 8) or point buy. Enter scores 1–30.
-            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-              {ABILITY_KEYS.map((key) => {
-                const m = mod(scores[key]);
-                return (
-                  <div key={key} className="card" style={{ textAlign: 'center', padding: '10px 8px' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                      {ABILITY_SHORT[key]}
-                    </div>
-                    <input
-                      type="number"
-                      min={1}
-                      max={30}
-                      value={scores[key]}
-                      onChange={(e) => setScore(key, e.target.value)}
-                      style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none' }}
-                    />
-                    <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
-                      {m >= 0 ? `+${m}` : m}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {isStandardArray ? (
+              <>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                  Click a slot, then click a value to assign it. Click an assigned slot to return it to the pool.
+                </p>
+
+                {/* Chip pool */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {engine.availableChips.map((chip, i) => (
+                    <button
+                      key={`${chip}-${i}`}
+                      onClick={() => {
+                        if (selectedSlot) {
+                          engine.assign(selectedSlot, chip);
+                          setSelectedSlot(null);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 6,
+                        border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
+                        background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
+                        color: 'var(--text-primary)',
+                        fontWeight: 700,
+                        fontSize: 16,
+                        cursor: selectedSlot ? 'pointer' : 'default',
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                  {engine.availableChips.length === 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All values assigned</span>
+                  )}
+                </div>
+
+                {/* Ability slots */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {ABILITY_KEYS.map((key) => {
+                    const val = engine.scores[key];
+                    const isSelected = selectedSlot === key;
+                    const m = mod(val ?? 10);
+                    return (
+                      <button
+                        key={key}
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          if (val !== null) {
+                            engine.unassign(key);
+                            setSelectedSlot(null);
+                          } else {
+                            setSelectedSlot(isSelected ? null : key);
+                          }
+                        }}
+                        style={{
+                          textAlign: 'center',
+                          padding: '10px 8px',
+                          background: isSelected ? 'rgba(212,175,55,0.1)' : 'var(--card-bg)',
+                          border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`,
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          color: 'inherit',
+                        }}
+                      >
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                          {ABILITY_SHORT[key]}
+                        </div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: val !== null ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 27 }}>
+                          {val !== null ? val : '—'}
+                        </div>
+                        <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
+                          {val !== null ? (m >= 0 ? `+${m}` : m) : ''}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                  Enter scores 1–30.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {ABILITY_KEYS.map((key) => {
+                    const m = mod(scores[key]);
+                    return (
+                      <div key={key} className="card" style={{ textAlign: 'center', padding: '10px 8px' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                          {ABILITY_SHORT[key]}
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={scores[key]}
+                          onChange={(e) => setScore(key, e.target.value)}
+                          style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none' }}
+                        />
+                        <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
+                          {m >= 0 ? `+${m}` : m}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Derived stats preview */}
@@ -349,7 +448,8 @@ export default function CharacterCreate({ user }) {
           <button
             className="btn btn-primary btn-full"
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={saving || (isStandardArray && !engine.isComplete)}
+            title={isStandardArray && !engine.isComplete ? 'Assign all ability scores to continue' : undefined}
           >
             {saving ? 'Saving character...' : 'Enter the Adventure →'}
           </button>

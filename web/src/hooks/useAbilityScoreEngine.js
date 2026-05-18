@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { rollDice } from '../utils/diceRoller';
 
 const ABILITY_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
 

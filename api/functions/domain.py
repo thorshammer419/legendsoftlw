@@ -263,10 +263,15 @@ def append_lobby_message(campaign_id: str, message: dict) -> None:
     upsert_lobby_chat_doc(doc)
 
 
-def lobby_presence_join(campaign_id: str, email: str) -> dict:
+_RAPID_REJOIN_SECONDS = 10
+
+
+def lobby_presence_join(campaign_id: str, email: str) -> dict | None:
     """
     Mark a player as present in the lobby.
-    Returns a system message dict for the join announcement.
+    Returns a system message dict for the join announcement, or None if the
+    join should be suppressed (rapid rejoin within the suppression window, or
+    player was already marked present).
     """
     char = get_character({"campaign_id": campaign_id, "email": email})
     char_name = char.get("name", "Adventurer") if char else "Adventurer"
@@ -276,8 +281,19 @@ def lobby_presence_join(campaign_id: str, email: str) -> dict:
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
 
+    suppress = False
     try:
         presence = get_lobby_presence_doc(campaign_id, email)
+        if presence.get("status") == "present":
+            # Already present — duplicate join (e.g. page refresh before leave queued)
+            suppress = True
+        elif presence.get("status") == "left":
+            updated = presence.get("updated_at", "")
+            if updated:
+                left_at = datetime.fromisoformat(updated)
+                elapsed = (datetime.now(timezone.utc) - left_at).total_seconds()
+                if elapsed < _RAPID_REJOIN_SECONDS:
+                    suppress = True
     except Exception:
         presence = {
             "id": f"presence_{campaign_id}_{email}",
@@ -291,6 +307,9 @@ def lobby_presence_join(campaign_id: str, email: str) -> dict:
     presence["display_name"] = display_name
     presence["updated_at"] = now
     upsert_lobby_presence_doc(presence)
+
+    if suppress:
+        return None
 
     parts = [p for p in [char_name, char_class, f"level {level}"] if p]
     text = f"⚔ {display_name} has entered the lobby — {', '.join(parts)}"

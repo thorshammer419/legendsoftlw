@@ -98,6 +98,16 @@ class TestLobbyPresenceJoin:
             resp = await lobby_presence_handler(req)
         assert resp.status_code == 403
 
+    @pytest.mark.asyncio
+    async def test_join_does_not_broadcast_when_suppressed(self):
+        from functions.webhook_http import lobby_presence_handler
+        with patch(f"{MODULE}.lobby_presence_join", return_value=None):
+            req = _make_req({"action": "join"})
+            resp = await lobby_presence_handler(req)
+        assert resp.status_code == 200
+        self.mock_append.assert_not_called()
+        self.mock_broadcast.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # POST /campaigns/{id}/lobby/presence  — leave

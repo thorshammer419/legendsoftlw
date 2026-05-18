@@ -641,13 +641,14 @@ async def lobby_presence_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     if action == "join":
         message = lobby_presence_join(campaign_id, email)
-        append_lobby_message(campaign_id, message)
-        all_players = get_campaign_players(campaign_id)
-        broadcast_lobby_event({
-            **message,
-            "campaign_id": campaign_id,
-            "player_emails": [p["email"] for p in all_players],
-        })
+        if message:
+            append_lobby_message(campaign_id, message)
+            all_players = get_campaign_players(campaign_id)
+            broadcast_lobby_event({
+                **message,
+                "campaign_id": campaign_id,
+                "player_emails": [p["email"] for p in all_players],
+            })
         return _json_response({"status": "joined"})
 
     if action == "leave":

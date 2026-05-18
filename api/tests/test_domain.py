@@ -671,6 +671,73 @@ class TestLobbyPresenceJoin:
         assert "message_id" in result
         assert "timestamp" in result
 
+    def test_suppresses_join_when_player_already_present(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].return_value = {
+            "status": "present",
+            "display_name": "Aria",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert result is None
+
+    def test_suppresses_join_on_rapid_rejoin(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        from datetime import datetime, timezone, timedelta
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        recent = (datetime.now(timezone.utc) - timedelta(seconds=3)).isoformat()
+        cosmos_mocks["get_lobby_presence_doc"].return_value = {
+            "status": "left",
+            "display_name": "Aria",
+            "updated_at": recent,
+        }
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert result is None
+
+    def test_announces_join_when_left_long_ago(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        from datetime import datetime, timezone, timedelta
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        long_ago = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+        cosmos_mocks["get_lobby_presence_doc"].return_value = {
+            "status": "left",
+            "display_name": "Aria",
+            "updated_at": long_ago,
+        }
+
+        result = lobby_presence_join(campaign_id, player_email)
+
+        assert result is not None
+        assert "Aria" in result["text"]
+
+    def test_still_persists_presence_doc_when_suppressed(
+        self, cosmos_mocks, campaign_id, player_email, character
+    ):
+        cosmos_mocks["get_character"].return_value = character
+        cosmos_mocks["get_player"].return_value = {"display_name": "Aria"}
+        cosmos_mocks["get_lobby_presence_doc"].return_value = {
+            "status": "present",
+            "display_name": "Aria",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+
+        lobby_presence_join(campaign_id, player_email)
+
+        cosmos_mocks["upsert_lobby_presence_doc"].assert_called_once()
+        saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
+        assert saved["status"] == "present"
+
 
 # ---------------------------------------------------------------------------
 # lobby_presence_leave

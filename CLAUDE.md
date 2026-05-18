@@ -75,8 +75,14 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Lobby chat class colors fix: `char_class` now stored on `campaign_player` document when character is saved (`save_character` domain function); `lobby_message_handler` reads `char_class` from `cp` (already fetched for the active-player check) instead of the global player doc where it was never written. 2 new domain tests + 2 new endpoint tests (234 Python / 120 JS total).
 - [x] Lobby presence announcements: join/leave system messages persisted to Cosmos and broadcast via SignalR; join format `"⚔ {display_name} has entered the lobby — {char_name}, {char_class}, level {level}"`; leave via `useEffect` cleanup + `navigator.sendBeacon` on tab close; 10-second rapid-rejoin suppression via `lobby-leave-announce` queue with visibility timeout (player rejoins within 10s → leave announcement dropped); join also suppressed when player was already "present" or left < 10s ago — prevents duplicate announcements on page refresh; presence doc (`presence_{campaignId}_{email}`) tracks current status + display_name; `POST /campaigns/{id}/lobby/presence` HTTP endpoint; `lobby-leave-announce` queue trigger; chat window resized to `calc(50vh - 120px)` with scrollbar. `enqueue` helper gains optional `visibility_timeout` param. 13 new domain tests + 15 new endpoint tests + 3 new frontend tests (261 Python / 128 JS total).
 
+- [x] Issue #63 — DiceRoller utility + useAbilityScoreEngine hook (TDD): `rollDice` pure function (`web/src/utils/diceRoller.js`); `useAbilityScoreEngine` hook covering Standard Array chip assignment, Point Buy point tracking, Roll for Stats chip generation, rerollChip, markRerolled. `crypto.getRandomValues` polyfill added to `setupTests.js`. 4 new DiceRoller tests + 16 new engine tests (261 Python / 148 JS total).
+
 ## Immediate Next Steps
-- Test full round lifecycle with real players: submit actions → resolve → narrative delivered via SignalR
+- Issue #64: Standard Array picker UI (chip-based assignment in CharacterCreate step 2)
+- Issue #65: Point Buy picker UI
+- Issue #66: Roll for Stats picker UI
+- Issue #67: Reroll request/approval card
+- Issue #68: 🎲 rerolled badge in lobby
 
 ## Key Design Decisions (Summary)
 See individual docs files for full detail on each system.

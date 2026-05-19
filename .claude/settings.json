@@ -10,7 +10,9 @@
       "Bash(git -C /workspaces/legendsoftlw push)",
       "Bash(git -C /workspaces/legendsoftlw add web/src/components/MusicPlayer.jsx web/src/App.jsx web/src/pages/Dashboard.jsx web/src/pages/Lobby.jsx web/src/pages/CharacterCreate.jsx web/src/components/__tests__/MusicPlayer.test.jsx)",
       "Bash(git -C /workspaces/legendsoftlw log --oneline -6)",
-      "Bash(.venv/bin/pytest tests/test_domain.py -v --tb=short)"
+      "Bash(.venv/bin/pytest tests/test_domain.py -v --tb=short)",
+      "Bash(python -c \"from functions.webhook_http import lobby_message_handler, lobby_chat_history_handler; print\\('imports OK'\\)\")",
+      "Bash(python -c \"from functions.domain import append_lobby_message, get_lobby_chat; print\\('domain imports OK'\\)\")"
     ]
   }
 }

@@ -50,6 +50,10 @@ export const api = {
     req(`/campaigns/${campaignId}/admin/settings`, { method: 'PATCH', body: JSON.stringify({ password }) }),
   regenerateInviteToken: (campaignId) =>
     req(`/campaigns/${campaignId}/admin/regenerate-invite`, { method: 'POST' }),
+  getRerollFlags: (campaignId) =>
+    req(`/campaigns/${campaignId}/admin/reroll-flags`),
+  removeRerollFlag: (campaignId, playerEmail) =>
+    req(`/campaigns/${campaignId}/admin/reroll-flag/${encodeURIComponent(playerEmail)}`, { method: 'DELETE' }),
 
   startRound: (campaignId) =>
     req(`/campaigns/${campaignId}/admin/start-round`, { method: 'POST' }),

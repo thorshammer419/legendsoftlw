@@ -21,6 +21,7 @@ from functions.activities.cosmos import (
     list_all_campaigns, get_campaign_by_invite_token,
     get_lobby_presence_doc,
     delete_reroll_flags_for_campaign,
+    get_reroll_flags_for_campaign, get_reroll_flag, delete_reroll_flag,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -533,6 +534,59 @@ async def admin_regenerate_invite_handler(req: func.HttpRequest) -> func.HttpRes
     campaign["invite_token"] = secrets.token_urlsafe(32)
     update_campaign(campaign)
     return _json_response({"invite_token": campaign["invite_token"]})
+
+
+# ---------------------------------------------------------------------------
+# Admin — Reroll Flags
+# ---------------------------------------------------------------------------
+
+async def admin_list_reroll_flags_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    if not _is_system_admin(email):
+        return _error("System admin access required", 403)
+
+    campaign_id = req.route_params.get("campaign_id")
+    flags = get_reroll_flags_for_campaign(campaign_id)
+    result = []
+    for flag in flags:
+        player_email = flag["email"]
+        player = get_player(player_email)
+        char = get_character({"campaign_id": campaign_id, "email": player_email})
+        result.append({
+            "email": player_email,
+            "display_name": player.get("display_name", player_email) if player else player_email,
+            "char_name": char.get("name", "—") if char else "—",
+            "char_class": char.get("class", "—") if char else "—",
+        })
+    return _json_response(result)
+
+
+async def admin_remove_reroll_flag_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    if not _is_system_admin(email):
+        return _error("System admin access required", 403)
+
+    campaign_id = req.route_params.get("campaign_id")
+    player_email = req.route_params.get("player_email")
+
+    flag = get_reroll_flag(campaign_id, player_email)
+    if not flag:
+        return _error("Reroll flag not found", 404)
+
+    delete_reroll_flag(campaign_id, player_email)
+
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": player_email})
+    if cp:
+        cp.pop("rerolled", None)
+        upsert_campaign_player(cp)
+
+    return _json_response({"status": "removed"})
 
 
 # ---------------------------------------------------------------------------

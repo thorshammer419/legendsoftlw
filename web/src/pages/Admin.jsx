@@ -21,12 +21,21 @@ export default function Admin({ user, isAdmin }) {
   const [newPassword, setNewPassword] = useState('');
   const [passwordWorking, setPasswordWorking] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [rerollFlags, setRerollFlags] = useState(null);
+  const [confirmRemoveFlag, setConfirmRemoveFlag] = useState(null);
+  const [removingFlag, setRemovingFlag] = useState(false);
 
   useEffect(() => {
     api.getAllowedUsers()
       .then(setAllowedUsers)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api.getRerollFlags(campaignId)
+      .then(setRerollFlags)
+      .catch(() => {});
+  }, [campaignId]);
 
   const notify = (msg) => {
     setNotification(msg);
@@ -132,6 +141,20 @@ export default function Admin({ user, isAdmin }) {
       notify(`Error: ${err.message}`);
     } finally {
       setRegenerating(false);
+    }
+  };
+
+  const removeRerollFlag = async (playerEmail) => {
+    setRemovingFlag(true);
+    try {
+      await api.removeRerollFlag(campaignId, playerEmail);
+      setRerollFlags((prev) => prev.filter((f) => f.email !== playerEmail));
+      setConfirmRemoveFlag(null);
+      notify('Reroll flag removed.');
+    } catch (err) {
+      notify(`Error: ${err.message}`);
+    } finally {
+      setRemovingFlag(false);
     }
   };
 
@@ -366,6 +389,66 @@ export default function Admin({ user, isAdmin }) {
                     >
                       Remove
                     </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reroll Flags — only visible to system admins */}
+        {rerollFlags !== null && (
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Reroll Flags</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+              Players who have been granted a reroll. Removing a flag lets them reroll again if approved.
+            </p>
+            {rerollFlags.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>No active reroll flags.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {rerollFlags.map((f) => (
+                  <div key={f.email} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, color: 'var(--text-primary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }} title={f.email}>{f.display_name || f.email}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {f.char_name} · {f.char_class}
+                      </div>
+                    </div>
+                    {confirmRemoveFlag === f.email ? (
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: 'var(--danger)', color: '#fff', padding: '2px 10px' }}
+                          onClick={() => removeRerollFlag(f.email)}
+                          disabled={removingFlag}
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)', padding: '2px 10px' }}
+                          onClick={() => setConfirmRemoveFlag(null)}
+                          disabled={removingFlag}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-sm"
+                        style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '2px 10px', flexShrink: 0 }}
+                        onClick={() => setConfirmRemoveFlag(f.email)}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -140,6 +140,16 @@ async def admin_regenerate_invite(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.admin_regenerate_invite_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/admin/reroll-flags", methods=["GET"])
+async def admin_list_reroll_flags(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_list_reroll_flags_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/admin/reroll-flag/{player_email}", methods=["DELETE"])
+async def admin_remove_reroll_flag(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.admin_remove_reroll_flag_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}/lobby/message", methods=["POST"])
 async def lobby_message(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.lobby_message_handler(req)

@@ -31,7 +31,10 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
   const [rollResults, setRollResults] = useState([]);
   const [rerolledFlags, setRerolledFlags] = useState({});
 
-  // Reset all state when the method changes (e.g. API response arrives after default render)
+  // Reset all state when method or SA values change (API response arrives after default render)
+  const standardArrayKey = method === 'standard_array'
+    ? JSON.stringify(rules.standard_array ?? [15, 14, 13, 12, 10, 8])
+    : null;
   useEffect(() => {
     setScores({ ...NULL_SCORES });
     setRollResults([]);
@@ -41,7 +44,7 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
         ? [...(rules.standard_array ?? [15, 14, 13, 12, 10, 8])]
         : []
     );
-  }, [method]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [method, standardArrayKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Standard Array & Roll: assign a chip value to an ability ──────────────
   const assign = useCallback((ability, value) => {

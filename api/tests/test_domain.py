@@ -427,6 +427,28 @@ class TestSaveCharacter:
         saved_cp = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
         assert "rerolled" not in saved_cp
 
+    def test_writes_reroll_flag_doc_when_rerolled(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = False
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        save_character(campaign_id, player_email, {"name": "Kira", "rerolled": True})
+
+        cosmos_mocks["upsert_reroll_flag"].assert_called_once_with(campaign_id, player_email)
+
+    def test_does_not_write_reroll_flag_doc_when_not_rerolled(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        active_campaign_player["character_creation_complete"] = False
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        save_character(campaign_id, player_email, {"name": "Kira"})
+
+        cosmos_mocks["upsert_reroll_flag"].assert_not_called()
+
     def test_persists_character_with_correct_ids(
         self, cosmos_mocks, campaign_id, player_email, active_campaign_player
     ):
@@ -488,6 +510,26 @@ class TestJoinCampaignAsObserver:
         cosmos_mocks["upsert_campaign_player"].assert_called_once()
         saved = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
         assert saved["email"] == player_email
+
+    def test_seeds_rerolled_when_flag_exists(self, cosmos_mocks, campaign_id, player_email):
+        cosmos_mocks["get_reroll_flag"].return_value = {
+            "id": f"reroll_flag_{campaign_id}_{player_email}",
+            "campaign_id": campaign_id,
+            "email": player_email,
+        }
+
+        result = join_campaign_as_observer(campaign_id, player_email)
+
+        assert result.get("rerolled") is True
+        saved = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved.get("rerolled") is True
+
+    def test_does_not_set_rerolled_when_no_flag(self, cosmos_mocks, campaign_id, player_email):
+        cosmos_mocks["get_reroll_flag"].return_value = None
+
+        result = join_campaign_as_observer(campaign_id, player_email)
+
+        assert "rerolled" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +596,16 @@ class TestLeaveCampaign:
         result = leave_campaign(campaign_id, player_email)
 
         assert result["display_name"] == "adventurer"  # prefix of adventurer@example.com
+
+    def test_does_not_delete_reroll_flag_on_leave(
+        self, cosmos_mocks, campaign_id, player_email, active_campaign_player
+    ):
+        cosmos_mocks["get_campaign_player"].return_value = active_campaign_player
+        cosmos_mocks["get_player"].return_value = None
+
+        leave_campaign(campaign_id, player_email)
+
+        cosmos_mocks["delete_reroll_flag"].assert_not_called()
 
 
 # ---------------------------------------------------------------------------

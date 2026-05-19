@@ -63,6 +63,11 @@ def cosmos_mocks():
         "upsert_lobby_chat_doc",
         "get_lobby_presence_doc",
         "upsert_lobby_presence_doc",
+        "upsert_reroll_flag",
+        "get_reroll_flag",
+        "delete_reroll_flag",
+        "get_reroll_flags_for_campaign",
+        "delete_reroll_flags_for_campaign",
     ]
     patches = {name: patch(f"{COSMOS_MODULE}.{name}") for name in targets}
     mocks = {name: p.start() for name, p in patches.items()}

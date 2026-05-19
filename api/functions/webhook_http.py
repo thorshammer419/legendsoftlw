@@ -20,6 +20,7 @@ from functions.activities.cosmos import (
     get_allowed_user, upsert_allowed_user, delete_allowed_user, list_allowed_users,
     list_all_campaigns, get_campaign_by_invite_token,
     get_lobby_presence_doc,
+    delete_reroll_flags_for_campaign,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -712,6 +713,7 @@ async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     campaign["status"] = "deleted"
     update_campaign(campaign)
+    delete_reroll_flags_for_campaign(campaign_id)
 
     if player_emails:
         broadcast_lobby_event({

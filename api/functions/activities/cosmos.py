@@ -486,3 +486,48 @@ def get_lobby_presence_doc(campaign_id: str, email: str) -> dict:
 def upsert_lobby_presence_doc(doc: dict) -> dict:
     c = _container()
     return c.upsert_item(body=doc)
+
+
+def upsert_reroll_flag(campaign_id: str, email: str) -> None:
+    c = _container()
+    doc = {
+        "id": f"reroll_flag_{campaign_id}_{email}",
+        "type": "reroll_flag",
+        "campaign_id": campaign_id,
+        "email": email,
+    }
+    c.upsert_item(body=doc)
+
+
+def get_reroll_flag(campaign_id: str, email: str) -> dict | None:
+    c = _container()
+    try:
+        return c.read_item(
+            item=f"reroll_flag_{campaign_id}_{email}",
+            partition_key=campaign_id,
+        )
+    except exceptions.CosmosResourceNotFoundError:
+        return None
+
+
+def delete_reroll_flag(campaign_id: str, email: str) -> None:
+    c = _container()
+    try:
+        c.delete_item(item=f"reroll_flag_{campaign_id}_{email}", partition_key=campaign_id)
+    except exceptions.CosmosResourceNotFoundError:
+        pass
+
+
+def get_reroll_flags_for_campaign(campaign_id: str) -> list[dict]:
+    c = _container()
+    query = "SELECT * FROM c WHERE c.campaign_id = @cid AND c.type = 'reroll_flag'"
+    return list(c.query_items(
+        query=query,
+        parameters=[{"name": "@cid", "value": campaign_id}],
+        enable_cross_partition_query=False,
+    ))
+
+
+def delete_reroll_flags_for_campaign(campaign_id: str) -> None:
+    for flag in get_reroll_flags_for_campaign(campaign_id):
+        delete_reroll_flag(campaign_id, flag["email"])

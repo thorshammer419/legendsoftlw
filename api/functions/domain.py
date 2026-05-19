@@ -17,6 +17,8 @@ from functions.activities.cosmos import (
     create_campaign, delete_campaign_player, delete_character,
     get_lobby_chat_doc, upsert_lobby_chat_doc,
     get_lobby_presence_doc, upsert_lobby_presence_doc,
+    upsert_reroll_flag, get_reroll_flag, delete_reroll_flag,
+    get_reroll_flags_for_campaign, delete_reroll_flags_for_campaign,
 )
 
 
@@ -178,6 +180,7 @@ def save_character(campaign_id: str, email: str, body: dict) -> dict:
     cp["char_class"] = body.get("class", "")
     if body.get("rerolled"):
         cp["rerolled"] = True
+        upsert_reroll_flag(campaign_id, email)
     upsert_campaign_player(cp)
 
     if not was_complete:
@@ -236,6 +239,8 @@ def join_campaign_as_observer(campaign_id: str, email: str) -> dict:
         "character_creation_complete": False,
         "notifications": {"email": True, "push": False},
     }
+    if get_reroll_flag(campaign_id, email):
+        cp["rerolled"] = True
     upsert_campaign_player(cp)
     return cp
 

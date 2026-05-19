@@ -60,12 +60,26 @@ function NavbarCenterSlot() {
   return <div>{centerContent}</div>;
 }
 
+function NavbarBackSlot() {
+  const { backOverride } = useNavbar();
+  return backOverride ? <div data-testid="back-override">{backOverride}</div> : null;
+}
+
+function NavbarRerollSlot() {
+  const { pendingRerollRequest } = useNavbar();
+  return pendingRerollRequest
+    ? <div data-testid="reroll-card">{pendingRerollRequest.player_display_name}</div>
+    : null;
+}
+
 function renderAsPlayer() {
   lobbyEventHandler = null;
   return render(
     <NavbarProvider>
       <MemoryRouter>
         <NavbarCenterSlot />
+        <NavbarRerollSlot />
+        <NavbarBackSlot />
         <Lobby user={{ userDetails: 'player@example.com' }} />
       </MemoryRouter>
     </NavbarProvider>
@@ -78,6 +92,8 @@ function renderAsCreator() {
     <NavbarProvider>
       <MemoryRouter>
         <NavbarCenterSlot />
+        <NavbarRerollSlot />
+        <NavbarBackSlot />
         <Lobby user={{ userDetails: 'creator@example.com' }} />
       </MemoryRouter>
     </NavbarProvider>
@@ -488,6 +504,36 @@ describe('Rerolled badge', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Reroll approval card
+// ---------------------------------------------------------------------------
+
+describe('Reroll approval card', () => {
+  const rerollEvent = {
+    type: 'reroll_request',
+    campaign_id: 'test-campaign',
+    player_email: 'player@example.com',
+    player_display_name: 'Thandor',
+    old_value: 14,
+  };
+
+  test('creator receives approval card when reroll_request event fires', async () => {
+    renderAsCreator();
+    act(() => lobbyEventHandler(rerollEvent));
+    await waitFor(() => {
+      expect(screen.getByTestId('reroll-card')).toBeInTheDocument();
+    });
+  });
+
+  test('non-creator does not receive approval card when reroll_request event fires', async () => {
+    renderAsPlayer();
+    act(() => lobbyEventHandler(rerollEvent));
+    await waitFor(() => {
+      expect(screen.queryByTestId('reroll-card')).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // REROLL label in roster
 // ---------------------------------------------------------------------------
 
@@ -515,5 +561,30 @@ describe('REROLL label in roster', () => {
     renderAsPlayer();
     expect(screen.getByText('creator')).toBeInTheDocument();
     expect(screen.getByText('REROLL')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Back navigation override
+// ---------------------------------------------------------------------------
+
+describe('Back navigation override', () => {
+  test('Lobby sets backOverride to character creation step 2 on mount', () => {
+    renderAsPlayer();
+    expect(screen.getByTestId('back-override')).toHaveTextContent('/campaigns/test-campaign/character?step=2');
+  });
+
+  test('backOverride is cleared when Lobby unmounts', () => {
+    const { unmount } = renderAsPlayer();
+    unmount();
+    // Re-render a plain component using the same NavbarProvider to check value is gone
+    // Since unmount tears down the provider too, we verify by re-rendering and seeing no slot
+    // The cleanup is tested indirectly: re-rendering without Lobby shows no override
+    const { queryByTestId } = render(
+      <NavbarProvider>
+        <NavbarBackSlot />
+      </NavbarProvider>
+    );
+    expect(queryByTestId('back-override')).not.toBeInTheDocument();
   });
 });

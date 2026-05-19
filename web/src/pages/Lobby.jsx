@@ -33,7 +33,7 @@ function formatTime(isoString) {
 export default function Lobby({ user, isAdmin }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
-  const { setCenterContent } = useNavbar();
+  const { setCenterContent, setPendingRerollRequest, setBackOverride } = useNavbar();
 
   const { campaign, players, loading, refresh } = useCampaign(campaignId);
   const [messages, setMessages] = useState([]);
@@ -52,6 +52,12 @@ export default function Lobby({ user, isAdmin }) {
       navigate(`/game/${campaignId}`, { replace: true });
     }
   }, [campaign, navigate, campaignId]);
+
+  // Set back button to go to CharacterCreate step 2; clear on unmount
+  useEffect(() => {
+    setBackOverride(`/campaigns/${campaignId}/character?step=2`);
+    return () => setBackOverride(null);
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Announce join on mount; announce leave on unmount (+ beacon for tab close)
   useEffect(() => {
@@ -93,6 +99,13 @@ export default function Lobby({ user, isAdmin }) {
   }, [messages]);
 
   const onLobbyEvent = (event) => {
+    if (event.type === 'reroll_request') {
+      const email = user?.userDetails;
+      if (campaign?.creator_emails?.includes(email)) {
+        setPendingRerollRequest({ ...event, campaignId });
+      }
+      return;
+    }
     if (event.type === 'launched') {
       navigate(`/game/${campaignId}`, { replace: true });
       return;

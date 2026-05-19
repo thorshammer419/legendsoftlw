@@ -19,6 +19,8 @@ from functions.activities.cosmos import (
     get_lobby_presence_doc, upsert_lobby_presence_doc,
     upsert_reroll_flag, get_reroll_flag, delete_reroll_flag,
     get_reroll_flags_for_campaign, delete_reroll_flags_for_campaign,
+    upsert_character_draft, get_character_draft, delete_character_draft,
+    delete_character_drafts_for_campaign,
 )
 
 
@@ -182,6 +184,7 @@ def save_character(campaign_id: str, email: str, body: dict) -> dict:
         cp["rerolled"] = True
         upsert_reroll_flag(campaign_id, email)
     upsert_campaign_player(cp)
+    delete_character_draft(campaign_id, email)
 
     if not was_complete:
         player = get_player(email)
@@ -212,10 +215,30 @@ def leave_campaign(campaign_id: str, email: str) -> dict:
 
     delete_campaign_player(campaign_id, email)
     delete_character(campaign_id, email)
+    delete_character_draft(campaign_id, email)
 
     player = get_player(email)
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
     return {"email": email, "display_name": display_name}
+
+
+def save_character_draft(campaign_id: str, email: str, body: dict) -> None:
+    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
+    if not cp or cp.get("status") != "active":
+        raise DomainError("Not an active player in this campaign", 403)
+
+    doc = {
+        "id": f"character_draft_{campaign_id}_{email}",
+        "type": "character_draft",
+        "campaign_id": campaign_id,
+        "email": email,
+        **{k: body[k] for k in ("step", "identity", "scores", "available_chips", "roll_results") if k in body},
+    }
+    upsert_character_draft(doc)
+
+
+def get_character_draft_for_player(campaign_id: str, email: str) -> dict | None:
+    return get_character_draft(campaign_id, email)
 
 
 def join_campaign_as_observer(campaign_id: str, email: str) -> dict:

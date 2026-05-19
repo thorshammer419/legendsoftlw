@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
 import { useSignalR } from '../hooks/useSignalR';
@@ -67,9 +67,10 @@ const INITIAL_SCORES = { strength: 10, dexterity: 10, constitution: 10, intellig
 export default function CharacterCreate({ user }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setCenterContent } = useNavbar();
 
-  const [step, setStep] = useState(1); // 1 = identity, 2 = ability scores
+  const [step, setStep] = useState(() => searchParams.get('step') === '2' ? 2 : 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [maxLevel, setMaxLevel] = useState(null); // null = loading
@@ -79,6 +80,8 @@ export default function CharacterCreate({ user }) {
   const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
   const [actioning, setActioning] = useState(false);
   const [hasRerolled, setHasRerolled] = useState(false);
+  const [confirmingChipIdx, setConfirmingChipIdx] = useState(null);
+  const [campaignLoaded, setCampaignLoaded] = useState(false);
 
   const [identity, setIdentity] = useState({
     name: '',
@@ -130,12 +133,61 @@ export default function CharacterCreate({ user }) {
         setIdentity((i) => ({ ...i, level: max }));
         setAbilityScoreMethod(c.ability_score_method ?? 'standard_array');
         setAbilityScoreRules(c.ability_score_rules ?? { standard_array: [15, 14, 13, 12, 10, 8] });
+        setCampaignLoaded(true);
       })
-      .catch(() => setMaxLevel(20));
+      .catch(() => { setMaxLevel(20); setCampaignLoaded(true); });
   }, [campaignId]);
+
+  useEffect(() => {
+    if (!campaignLoaded) return;
+    api.getDraft(campaignId)
+      .then((draft) => {
+        if (!draft) return;
+        if (draft.identity) setIdentity(draft.identity);
+        if (draft.step === 2) setStep(2);
+        engine.restoreFromDraft({
+          scores: draft.scores,
+          availableChips: draft.available_chips,
+          rollResults: draft.roll_results,
+        });
+      })
+      .catch(() => {});
+  }, [campaignLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const myEmail = user?.userDetails;
   const iAmCreator = creatorEmails.includes(myEmail);
+
+  const draftRef = useRef(null);
+  draftRef.current = {
+    step,
+    identity,
+    scores: engine.scores,
+    available_chips: engine.availableChips,
+    roll_results: engine.rollResults,
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      fetch(`/api/campaigns/${campaignId}/character/draft`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draftRef.current),
+        keepalive: true,
+      });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleNext = async () => {
+    await api.saveDraft(campaignId, { ...draftRef.current, step: 2 }).catch(() => {});
+    setStep(2);
+  };
+
+  const handleBack = async () => {
+    await api.saveDraft(campaignId, { ...draftRef.current, step: 1 }).catch(() => {});
+    setStep(1);
+  };
 
   useEffect(() => {
     const totalSteps = iAmCreator ? 3 : 2;
@@ -336,7 +388,7 @@ export default function CharacterCreate({ user }) {
 
           <button
             className="btn btn-primary btn-full"
-            onClick={() => setStep(2)}
+            onClick={handleNext}
             disabled={!identity.name.trim()}
           >
             Ability Scores →
@@ -559,31 +611,78 @@ export default function CharacterCreate({ user }) {
                           </button>
                           {/* Reroll control under each chip */}
                           {iAmCreator ? (
-                            <button
-                              className="btn btn-sm"
-                              style={{ fontSize: 10, padding: '2px 6px' }}
-                              onClick={() => {
-                                const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
-                                engine.rerollChip(chip, result);
-                                setHasRerolled(true);
-                              }}
-                            >
-                              Reroll
-                            </button>
+                            confirmingChipIdx === i ? (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button
+                                  className="btn btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: '#fff' }}
+                                  onClick={() => {
+                                    const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
+                                    engine.rerollChip(chip, result);
+                                    setHasRerolled(true);
+                                    setConfirmingChipIdx(null);
+                                  }}
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="btn btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 6px' }}
+                                  onClick={() => setConfirmingChipIdx(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                className="btn btn-sm"
+                                style={{ fontSize: 10, padding: '2px 6px' }}
+                                onClick={() => setConfirmingChipIdx(i)}
+                              >
+                                Reroll
+                              </button>
+                            )
                           ) : (
-                            <button
-                              className="btn btn-sm"
-                              style={{ fontSize: 10, padding: '2px 6px' }}
-                              disabled={reroll.status === 'pending'}
-                              onClick={() => {
-                                if (reroll.status === 'denied') { reroll.clearDenied(); return; }
-                                reroll.requestReroll(chip);
-                              }}
-                            >
-                              {reroll.status === 'pending' ? 'Pending approval…'
-                                : reroll.status === 'denied' ? 'Denied — request again'
-                                : 'Request Reroll'}
-                            </button>
+                            reroll.status === 'pending' || reroll.status === 'denied' ? (
+                              <button
+                                className="btn btn-sm"
+                                style={{ fontSize: 10, padding: '2px 6px' }}
+                                disabled={reroll.status === 'pending'}
+                                onClick={() => {
+                                  if (reroll.status === 'denied') { reroll.clearDenied(); }
+                                }}
+                              >
+                                {reroll.status === 'pending' ? 'Pending approval…' : 'Denied — request again'}
+                              </button>
+                            ) : confirmingChipIdx === i ? (
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button
+                                  className="btn btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: '#fff' }}
+                                  onClick={() => {
+                                    reroll.requestReroll(chip);
+                                    setConfirmingChipIdx(null);
+                                  }}
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="btn btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 6px' }}
+                                  onClick={() => setConfirmingChipIdx(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                className="btn btn-sm"
+                                style={{ fontSize: 10, padding: '2px 6px' }}
+                                onClick={() => setConfirmingChipIdx(i)}
+                              >
+                                Request Reroll
+                              </button>
+                            )
                           )}
                         </div>
                       ))}
@@ -686,14 +785,23 @@ export default function CharacterCreate({ user }) {
             </div>
           )}
 
-          <button
-            className="btn btn-primary btn-full"
-            onClick={handleSubmit}
-            disabled={saving || (useEngine && !engine.isValid)}
-            title={useEngine && !engine.isValid ? (engine.validationMessage || 'Complete ability scores to continue') : undefined}
-          >
-            {saving ? 'Saving character...' : 'Enter the Adventure →'}
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              className="btn btn-full"
+              style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+              onClick={handleBack}
+            >
+              Back
+            </button>
+            <button
+              className="btn btn-primary btn-full"
+              onClick={handleSubmit}
+              disabled={saving || (useEngine && !engine.isValid)}
+              title={useEngine && !engine.isValid ? (engine.validationMessage || 'Complete ability scores to continue') : undefined}
+            >
+              {saving ? 'Saving character...' : 'Enter the Adventure →'}
+            </button>
+          </div>
         </div>
       )}
     </div>

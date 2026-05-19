@@ -100,6 +100,16 @@ async def upsert_character_route(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.upsert_character_handler(req)
 
 
+@app.route(route="campaigns/{campaign_id}/character/draft", methods=["PUT"])
+async def save_character_draft_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.save_character_draft_handler(req)
+
+
+@app.route(route="campaigns/{campaign_id}/character/draft", methods=["GET"])
+async def get_character_draft_route(req: func.HttpRequest) -> func.HttpResponse:
+    return await wh.get_character_draft_handler(req)
+
+
 @app.route(route="campaigns/{campaign_id}/submit-action", methods=["POST"])
 async def submit_action(req: func.HttpRequest) -> func.HttpResponse:
     return await wh.submit_action(req)

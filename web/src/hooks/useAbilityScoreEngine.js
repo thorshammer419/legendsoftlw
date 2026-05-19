@@ -116,6 +116,13 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
     setRerolledFlags((prev) => ({ ...prev, [ability]: true }));
   }, []);
 
+  // ── Restore state from a persisted draft ──────────────────────────────────
+  const restoreFromDraft = useCallback(({ scores: s, availableChips: chips, rollResults: rolls }) => {
+    setScores(s && typeof s === 'object' ? { ...NULL_SCORES, ...s } : { ...NULL_SCORES });
+    setAvailableChips(Array.isArray(chips) ? chips : []);
+    setRollResults(Array.isArray(rolls) ? rolls : []);
+  }, []);
+
   // ── Derived values ────────────────────────────────────────────────────────
   const assigned = ABILITY_KEYS.filter((k) => scores[k] !== null);
   // Point buy: all scores effectively set (null → 8), so always complete
@@ -160,5 +167,6 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
     recordRoll,
     rerollChip,
     markRerolled,
+    restoreFromDraft,
   };
 }

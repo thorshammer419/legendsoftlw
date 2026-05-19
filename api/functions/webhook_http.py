@@ -22,6 +22,7 @@ from functions.activities.cosmos import (
     get_lobby_presence_doc,
     delete_reroll_flags_for_campaign,
     get_reroll_flags_for_campaign, get_reroll_flag, delete_reroll_flag,
+    delete_character_drafts_for_campaign,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -33,6 +34,7 @@ from functions.domain import (
     DomainError, submit_player_action, create_new_campaign, save_character,
     join_campaign_as_observer, leave_campaign, append_lobby_message, get_lobby_chat,
     lobby_presence_join, lobby_presence_leave,
+    save_character_draft, get_character_draft_for_player,
 )
 from helpers.queue import enqueue
 from helpers.llm import openai_client
@@ -341,6 +343,7 @@ async def get_game_state_handler(req: func.HttpRequest) -> func.HttpResponse:
                 "submitted": p["email"] in pending,
                 "character_ready": p.get("character_creation_complete", False),
                 "role": p.get("role", "player"),
+                "rerolled": p.get("rerolled", False),
             }
             for p in campaign_players if p.get("status") == "active"
         ],
@@ -590,6 +593,42 @@ async def admin_remove_reroll_flag_handler(req: func.HttpRequest) -> func.HttpRe
 
 
 # ---------------------------------------------------------------------------
+# Character draft
+# ---------------------------------------------------------------------------
+
+async def save_character_draft_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    try:
+        body = req.get_json()
+    except ValueError:
+        return _error("Invalid JSON")
+
+    try:
+        save_character_draft(campaign_id, email, body)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
+
+    return _json_response({"status": "saved"})
+
+
+async def get_character_draft_handler(req: func.HttpRequest) -> func.HttpResponse:
+    email, err = _require_auth_approved(req)
+    if err:
+        return err
+
+    campaign_id = req.route_params.get("campaign_id")
+    draft = get_character_draft_for_player(campaign_id, email)
+    if not draft:
+        return _error("No draft found", 404)
+
+    return _json_response(draft)
+
+
+# ---------------------------------------------------------------------------
 # Lobby
 # ---------------------------------------------------------------------------
 
@@ -768,6 +807,7 @@ async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     campaign["status"] = "deleted"
     update_campaign(campaign)
     delete_reroll_flags_for_campaign(campaign_id)
+    delete_character_drafts_for_campaign(campaign_id)
 
     if player_emails:
         broadcast_lobby_event({

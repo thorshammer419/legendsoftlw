@@ -8,7 +8,7 @@ export { NAVBAR_HEIGHT };
 export default function Navbar({ muted, onToggleMute }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { centerContent } = useNavbar();
+  const { centerContent, backOverride } = useNavbar();
 
   const isHome = location.pathname === '/';
 
@@ -31,7 +31,7 @@ export default function Navbar({ muted, onToggleMute }) {
         ) : (
           <button
             aria-label="Go back"
-            onClick={() => navigate(-1)}
+            onClick={() => backOverride ? navigate(backOverride) : navigate(-1)}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
           >
             <img src="/tlw_nav_back.png" alt="Back" style={{ height: 28, width: 'auto' }} />

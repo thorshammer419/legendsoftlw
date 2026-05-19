@@ -19,6 +19,8 @@ jest.mock('../../services/api', () => ({
     leaveCampaign: jest.fn(),
     deleteCampaign: jest.fn(),
     rerollRequest: jest.fn(),
+    saveDraft: jest.fn(),
+    getDraft: jest.fn(),
   },
 }));
 
@@ -77,10 +79,26 @@ function renderPageAsCreator() {
   );
 }
 
+function renderPageAtStep2(user = 'player@example.com') {
+  mockLobbyEventHandlers = [];
+  return render(
+    <NavbarProvider>
+      <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create?step=2']}>
+        <NavbarCenterSlot />
+        <Routes>
+          <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: user }} />} />
+        </Routes>
+      </MemoryRouter>
+    </NavbarProvider>
+  );
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockNavigate.mockReset();
   mockLobbyEventHandlers = [];
+  api.getDraft.mockResolvedValue(null);
+  api.saveDraft.mockResolvedValue({});
 })
 
 // ---------------------------------------------------------------------------
@@ -239,6 +257,7 @@ async function goToStep2(user) {
   await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
   await user.type(screen.getByLabelText(/character name/i), 'Aldric');
   await user.click(screen.getByRole('button', { name: /ability scores/i }));
+  await waitFor(() => expect(screen.queryByLabelText(/character name/i)).not.toBeInTheDocument());
 }
 
 describe('Standard Array picker', () => {
@@ -542,17 +561,84 @@ describe('Reroll controls — Roll for Stats assign phase', () => {
     expect(screen.queryByRole('button', { name: /request reroll/i })).not.toBeInTheDocument();
   });
 
-  test('clicking Request Reroll sets button to pending', async () => {
+  // --- Confirmation prompts ---
+
+  test('clicking Request Reroll shows Confirm/Cancel instead of firing immediately', async () => {
     const user = userEvent.setup();
     await goToAssignPhase(user);
     await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    expect(screen.getAllByRole('button', { name: /^confirm$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /^cancel$/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /pending approval/i })).not.toBeInTheDocument();
+  });
+
+  test('clicking Confirm on Request Reroll sends the request and shows pending', async () => {
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^confirm$/i })[0]);
     expect(screen.getAllByRole('button', { name: /pending approval/i }).length).toBeGreaterThan(0);
+  });
+
+  test('clicking Cancel on Request Reroll resets to original button', async () => {
+    const user = userEvent.setup();
+    await goToAssignPhase(user);
+    await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^cancel$/i })[0]);
+    expect(screen.getAllByRole('button', { name: /request reroll/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^confirm$/i })).not.toBeInTheDocument();
+  });
+
+  test('clicking Reroll (creator) shows Confirm/Cancel instead of firing immediately', async () => {
+    api.getCampaign.mockResolvedValue({ ...ROLL_CAMPAIGN, creator_emails: ['player@example.com'] });
+    rollDice.mockReturnValue(FIXED_ROLL);
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    await user.click(screen.getAllByRole('button', { name: /^reroll$/i })[0]);
+    expect(screen.getAllByRole('button', { name: /^confirm$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /^cancel$/i }).length).toBeGreaterThan(0);
+  });
+
+  test('clicking Confirm on Reroll (creator) performs the reroll', async () => {
+    api.getCampaign.mockResolvedValue({ ...ROLL_CAMPAIGN, creator_emails: ['player@example.com'] });
+    rollDice.mockReturnValue(FIXED_ROLL);
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    // Now all chips are 15; mock next roll to return 18
+    rollDice.mockReturnValueOnce({ rolls: [6, 6, 6, 1], kept: [6, 6, 6], dropped: [1], sum: 18 });
+    await user.click(screen.getAllByRole('button', { name: /^reroll$/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^confirm$/i })[0]);
+    // One chip should now show 18 instead of 15
+    expect(screen.getAllByRole('button', { name: '18' }).length).toBeGreaterThan(0);
+  });
+
+  test('clicking Cancel on Reroll (creator) resets to Reroll button', async () => {
+    api.getCampaign.mockResolvedValue({ ...ROLL_CAMPAIGN, creator_emails: ['player@example.com'] });
+    rollDice.mockReturnValue(FIXED_ROLL);
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user);
+    const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
+    for (const btn of rollBtns) await user.click(btn);
+    await user.click(screen.getAllByRole('button', { name: /^reroll$/i })[0]);
+    // Creator has a "Cancel" campaign button in the navbar — use last Cancel (chip confirm)
+    const cancelBtns = screen.getAllByRole('button', { name: /^cancel$/i });
+    await user.click(cancelBtns[cancelBtns.length - 1]);
+    expect(screen.getAllByRole('button', { name: /^reroll$/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^confirm$/i })).not.toBeInTheDocument();
   });
 
   test('denied response shows Denied message', async () => {
     const user = userEvent.setup();
     await goToAssignPhase(user);
     await user.click(screen.getAllByRole('button', { name: /request reroll/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^confirm$/i })[0]);
     act(() => mockFireLobbyEvent({ type: 'reroll_response', player_email: 'player@example.com', approved: false }));
     expect(screen.getAllByRole('button', { name: /denied/i }).length).toBeGreaterThan(0);
   });
@@ -623,6 +709,8 @@ describe('Rerolled flag in saveCharacter payload', () => {
     const rollBtns = screen.getAllByRole('button', { name: /^roll$/i });
     for (const btn of rollBtns) await user.click(btn);
     await user.click(screen.getAllByRole('button', { name: /^reroll$/i })[0]);
+    // Creator has campaign Cancel in navbar — chip Confirm is the only Confirm button
+    await user.click(screen.getAllByRole('button', { name: /^confirm$/i })[0]);
     await assignAllChipsInOrder(user);
     await user.click(screen.getByRole('button', { name: /enter the adventure/i }));
     await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
@@ -641,5 +729,102 @@ describe('Rerolled flag in saveCharacter payload', () => {
     await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
     const payload = api.saveCharacter.mock.calls[0][1];
     expect(payload.rerolled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Navigation — step param and back button
+// ---------------------------------------------------------------------------
+
+describe('Navigation', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 5, creator_emails: [] });
+  });
+
+  test('?step=2 param skips to ability scores step on mount', async () => {
+    renderPageAtStep2();
+    await waitFor(() => {
+      expect(screen.getByText(/ability scores/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/character name/i)).not.toBeInTheDocument();
+    });
+  });
+
+  test('step 2 shows a Back button that returns to step 1', async () => {
+    const user = userEvent.setup();
+    renderPageAtStep2();
+    await waitFor(() => expect(screen.getByText(/ability scores/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Draft persistence — issue #78
+// ---------------------------------------------------------------------------
+
+describe('Draft persistence', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+  });
+
+  test('fetches draft on mount after campaign loads', async () => {
+    renderPage();
+    await waitFor(() => expect(api.getDraft).toHaveBeenCalledWith('test-campaign'));
+  });
+
+  test('restores identity silently when draft exists', async () => {
+    api.getDraft.mockResolvedValue({
+      step: 1,
+      identity: { name: 'Thandor', race: 'Human', class_name: 'Fighter', background: 'Soldier', alignment: 'True Neutral', level: 1, backstory: '' },
+      scores: {},
+      available_chips: [15, 14, 13, 12, 10, 8],
+      roll_results: [],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Thandor')).toBeInTheDocument());
+  });
+
+  test('restores step 2 when draft.step is 2', async () => {
+    api.getDraft.mockResolvedValue({ step: 2, identity: null, scores: {}, available_chips: [], roll_results: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/ability scores/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/character name/i)).not.toBeInTheDocument();
+    });
+  });
+
+  test('Next button saves draft with step=2 before advancing', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/character name/i), 'Aldric');
+    await user.click(screen.getByRole('button', { name: /ability scores/i }));
+    await waitFor(() => expect(api.saveDraft).toHaveBeenCalledWith(
+      'test-campaign',
+      expect.objectContaining({ step: 2, identity: expect.objectContaining({ name: 'Aldric' }) })
+    ));
+  });
+
+  test('Back button saves draft with step=1', async () => {
+    const user = userEvent.setup();
+    renderPageAtStep2();
+    await waitFor(() => expect(screen.getByText(/ability scores/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^back$/i }));
+    await waitFor(() => expect(api.saveDraft).toHaveBeenCalledWith(
+      'test-campaign',
+      expect.objectContaining({ step: 1 })
+    ));
+  });
+
+  test('beforeunload event saves draft via fetch with keepalive', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    window.dispatchEvent(new Event('beforeunload'));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/campaigns/test-campaign/character/draft',
+      expect.objectContaining({ method: 'PUT', keepalive: true })
+    );
+    fetchSpy.mockRestore();
   });
 });

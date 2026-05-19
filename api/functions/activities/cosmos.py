@@ -531,3 +531,46 @@ def get_reroll_flags_for_campaign(campaign_id: str) -> list[dict]:
 def delete_reroll_flags_for_campaign(campaign_id: str) -> None:
     for flag in get_reroll_flags_for_campaign(campaign_id):
         delete_reroll_flag(campaign_id, flag["email"])
+
+
+# ---------------------------------------------------------------------------
+# Character draft
+# ---------------------------------------------------------------------------
+
+def upsert_character_draft(doc: dict) -> None:
+    c = _container()
+    c.upsert_item(body=doc)
+
+
+def get_character_draft(campaign_id: str, email: str) -> dict | None:
+    c = _container()
+    try:
+        return c.read_item(
+            item=f"character_draft_{campaign_id}_{email}",
+            partition_key=campaign_id,
+        )
+    except exceptions.CosmosResourceNotFoundError:
+        return None
+
+
+def delete_character_draft(campaign_id: str, email: str) -> None:
+    c = _container()
+    try:
+        c.delete_item(item=f"character_draft_{campaign_id}_{email}", partition_key=campaign_id)
+    except exceptions.CosmosResourceNotFoundError:
+        pass
+
+
+def get_character_drafts_for_campaign(campaign_id: str) -> list[dict]:
+    c = _container()
+    query = "SELECT * FROM c WHERE c.campaign_id = @cid AND c.type = 'character_draft'"
+    return list(c.query_items(
+        query=query,
+        parameters=[{"name": "@cid", "value": campaign_id}],
+        enable_cross_partition_query=False,
+    ))
+
+
+def delete_character_drafts_for_campaign(campaign_id: str) -> None:
+    for draft in get_character_drafts_for_campaign(campaign_id):
+        delete_character_draft(campaign_id, draft["email"])

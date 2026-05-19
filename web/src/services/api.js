@@ -33,6 +33,10 @@ export const api = {
   saveCharacter: (campaignId, data) =>
     req(`/campaigns/${campaignId}/character`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  saveDraft: (campaignId, data) =>
+    req(`/campaigns/${campaignId}/character/draft`, { method: 'PUT', body: JSON.stringify(data) }),
+  getDraft: (campaignId) => req(`/campaigns/${campaignId}/character/draft`),
+
   submitAction: (campaignId, actionText, rolls = []) =>
     req(`/campaigns/${campaignId}/submit-action`, {
       method: 'POST',

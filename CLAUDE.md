@@ -87,9 +87,10 @@ responses grounded in D&D 5e SRD 5.1 rules.
 - [x] Issue #70 — Persistent reroll flag Cosmos doc: `upsert_reroll_flag`, `get_reroll_flag`, `delete_reroll_flag`, `get_reroll_flags_for_campaign`, `delete_reroll_flags_for_campaign` in cosmos.py; `save_character` writes flag when `rerolled:True` in payload; `join_campaign_as_observer` seeds `rerolled` on campaign_player from flag doc (persists across leave/rejoin); flag docs cleaned up on campaign cancel (`delete_campaign_handler`). 7 new domain tests + 2 new delete-campaign tests (288 Python total).
 - [x] Issue #71 — REROLL label in Lobby roster: `<span>` after creator label, red (`var(--danger)`), bold, all-caps, 11px; shown when `p.rerolled` is true. 3 new Lobby frontend tests (193 JS total).
 - [x] Issue #72 — Admin Reroll Flags card: `GET /campaigns/{id}/admin/reroll-flags` returns `[{email, display_name, char_name, char_class}]`; `DELETE /campaigns/{id}/admin/reroll-flag/{player_email}` deletes flag + clears `rerolled` from campaign_player; system-admin-only (403 otherwise, 404 if flag missing); routes registered in `function_app.py`; `getRerollFlags`/`removeRerollFlag` added to `services/api.js`; Admin.jsx loads flags on mount and shows card (null = hidden, [] = "No active reroll flags"); inline confirm/cancel buttons per row. 8 new backend tests (288 Python / 193 JS total).
+- [x] Issues #74–#78 (PRD #73) — Roll-for-stats reroll + character draft polish: #74 `rerolled` in `party_status` endpoint; #75 `reroll_request` SignalR handled in Lobby (creator sees approval card); #76 per-chip confirm/cancel flow (by index, not value — handles duplicate sums); #77 `backOverride` in NavbarContext + `?step=2` query param to restore step; #78 server-side character draft — `character_draft` Cosmos doc, `PUT/GET /campaigns/{id}/character/draft` endpoints, `save_character_draft`/`get_character_draft_for_player` domain functions, draft cleared on save/leave/cancel, `restoreFromDraft` added to `useAbilityScoreEngine`, CharacterCreate silently restores draft on mount and saves on Next/Back/beforeunload. 12 new backend tests + 6 new frontend tests (301 Python / 210 JS total).
 
 ## Immediate Next Steps
-- Issue #73: Next feature TBD
+- Issue #79: Next feature TBD
 
 ## Key Design Decisions (Summary)
 See individual docs files for full detail on each system.

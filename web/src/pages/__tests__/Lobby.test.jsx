@@ -486,3 +486,34 @@ describe('Rerolled badge', () => {
     expect(screen.queryByText(/🎲/)).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// REROLL label in roster
+// ---------------------------------------------------------------------------
+
+describe('REROLL label in roster', () => {
+  test('shows REROLL label when player has rerolled', () => {
+    mockCampaignState.players = [
+      { email: 'other@example.com', role: 'player', character_ready: true, rerolled: true },
+    ];
+    renderAsPlayer();
+    expect(screen.getByText('REROLL')).toBeInTheDocument();
+  });
+
+  test('does not show REROLL label when player has not rerolled', () => {
+    mockCampaignState.players = [
+      { email: 'other@example.com', role: 'player', character_ready: true, rerolled: false },
+    ];
+    renderAsPlayer();
+    expect(screen.queryByText('REROLL')).not.toBeInTheDocument();
+  });
+
+  test('shows both creator and REROLL labels when player is creator and has rerolled', () => {
+    mockCampaignState.players = [
+      { email: 'other@example.com', role: 'creator', character_ready: true, rerolled: true },
+    ];
+    renderAsPlayer();
+    expect(screen.getByText('creator')).toBeInTheDocument();
+    expect(screen.getByText('REROLL')).toBeInTheDocument();
+  });
+});

@@ -276,6 +276,9 @@ export default function Lobby({ user, isAdmin }) {
                 {p.role === 'creator' && (
                   <span style={{ fontSize: 11, color: 'var(--gold)', fontStyle: 'italic' }}>creator</span>
                 )}
+                {p.rerolled && (
+                  <span style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 700 }}>REROLL</span>
+                )}
                 {!p.character_ready && (
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>creating character...</span>
                 )}

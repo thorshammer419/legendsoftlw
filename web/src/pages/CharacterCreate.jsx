@@ -68,7 +68,7 @@ export default function CharacterCreate({ user }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { setCenterContent } = useNavbar();
+  const { setCenterContent, setBackOverride } = useNavbar();
 
   const [step, setStep] = useState(() => searchParams.get('step') === '2' ? 2 : 1);
   const [saving, setSaving] = useState(false);
@@ -142,7 +142,35 @@ export default function CharacterCreate({ user }) {
     if (!campaignLoaded) return;
     api.getDraft(campaignId)
       .then((draft) => {
-        if (!draft) return;
+        if (!draft) {
+          return api.getCharacter(campaignId)
+            .then((char) => {
+              if (!char) return;
+              setIdentity({
+                name: char.name || '',
+                race: char.race || RACES[0],
+                class_name: char.class || CLASSES[0].name,
+                background: char.background || BACKGROUNDS[0],
+                alignment: char.alignment || 'True Neutral',
+                level: char.level || 1,
+                backstory: char.backstory || '',
+              });
+              const rollResults = abilityScoreMethod === 'roll_for_stats'
+                ? ABILITY_KEYS.map((k) => ({
+                    rolls: [char.ability_scores[k]],
+                    kept: [char.ability_scores[k]],
+                    dropped: [],
+                    sum: char.ability_scores[k],
+                  }))
+                : [];
+              engine.restoreFromDraft({
+                scores: char.ability_scores,
+                availableChips: [],
+                rollResults,
+              });
+            })
+            .catch(() => {});
+        }
         if (draft.identity) setIdentity(draft.identity);
         if (draft.step === 2) setStep(2);
         engine.restoreFromDraft({
@@ -188,6 +216,15 @@ export default function CharacterCreate({ user }) {
     await api.saveDraft(campaignId, { ...draftRef.current, step: 1 }).catch(() => {});
     setStep(1);
   };
+
+  useEffect(() => {
+    if (step !== 2) {
+      setBackOverride(null);
+      return () => setBackOverride(null);
+    }
+    setBackOverride(() => handleBack);
+    return () => setBackOverride(null);
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const totalSteps = iAmCreator ? 3 : 2;

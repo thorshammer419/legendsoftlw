@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 
-const NavbarContext = createContext(null);
+export const NavbarContext = createContext(null);
 
 export function NavbarProvider({ children }) {
   const [centerContent, setCenterContent] = useState(null);

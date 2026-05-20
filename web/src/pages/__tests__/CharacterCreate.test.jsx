@@ -21,6 +21,7 @@ jest.mock('../../services/api', () => ({
     rerollRequest: jest.fn(),
     saveDraft: jest.fn(),
     getDraft: jest.fn(),
+    getCharacter: jest.fn(),
   },
 }));
 
@@ -49,6 +50,19 @@ function mockFireLobbyEvent(event) {
 function NavbarCenterSlot() {
   const { centerContent } = useNavbar();
   return <div>{centerContent}</div>;
+}
+
+function NavbarBackSlot() {
+  const { backOverride } = useNavbar();
+  if (!backOverride) return null;
+  return (
+    <button
+      data-testid="navbar-back"
+      onClick={() => (typeof backOverride === 'function' ? backOverride() : mockNavigate(backOverride))}
+    >
+      navbar back
+    </button>
+  );
 }
 
 function renderPage() {
@@ -93,12 +107,28 @@ function renderPageAtStep2(user = 'player@example.com') {
   );
 }
 
+function renderPageAtStep2WithBackSlot(user = 'player@example.com') {
+  mockLobbyEventHandlers = [];
+  return render(
+    <NavbarProvider>
+      <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create?step=2']}>
+        <NavbarCenterSlot />
+        <NavbarBackSlot />
+        <Routes>
+          <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: user }} />} />
+        </Routes>
+      </MemoryRouter>
+    </NavbarProvider>
+  );
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockNavigate.mockReset();
   mockLobbyEventHandlers = [];
   api.getDraft.mockResolvedValue(null);
   api.saveDraft.mockResolvedValue({});
+  api.getCharacter.mockResolvedValue(null);
 })
 
 // ---------------------------------------------------------------------------
@@ -756,6 +786,18 @@ describe('Navigation', () => {
     await user.click(screen.getByRole('button', { name: /^back$/i }));
     await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
   });
+
+  test('Navbar back arrow on step 2 saves draft and returns to step 1', async () => {
+    const user = userEvent.setup();
+    renderPageAtStep2WithBackSlot();
+    await waitFor(() => expect(screen.getByTestId('navbar-back')).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    await waitFor(() => expect(api.saveDraft).toHaveBeenCalledWith(
+      'test-campaign',
+      expect.objectContaining({ step: 1 })
+    ));
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -826,5 +868,57 @@ describe('Draft persistence', () => {
       expect.objectContaining({ method: 'PUT', keepalive: true })
     );
     fetchSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Character restore fallback — issue #81
+// ---------------------------------------------------------------------------
+
+const SAVED_CHARACTER = {
+  name: 'Thorin',
+  race: 'Mountain Dwarf',
+  class: 'Barbarian',
+  background: 'Soldier',
+  alignment: 'Lawful Good',
+  level: 3,
+  backstory: 'A seasoned warrior',
+  ability_scores: { strength: 15, dexterity: 14, constitution: 13, intelligence: 12, wisdom: 10, charisma: 8 },
+};
+
+describe('Character restore fallback (no draft)', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.getDraft.mockResolvedValue(null);
+    api.getCharacter.mockResolvedValue(SAVED_CHARACTER);
+  });
+
+  test('restores character name when draft is absent', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Thorin')).toBeInTheDocument());
+  });
+
+  test('restores ability scores on step 2 when draft is absent', async () => {
+    renderPageAtStep2();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^STR/i })).toHaveTextContent('15'));
+  });
+
+  test('save button enabled on step 2 when restored from saved character (standard_array)', async () => {
+    renderPageAtStep2();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled()
+    );
+  });
+
+  test('save button enabled on step 2 when restored from saved character (roll_for_stats)', async () => {
+    api.getCampaign.mockResolvedValue({
+      ...SA_CAMPAIGN,
+      ability_score_method: 'roll_for_stats',
+      ability_score_rules: { roll_dice: 4, roll_keep: 3 },
+    });
+    renderPageAtStep2();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled()
+    );
   });
 });

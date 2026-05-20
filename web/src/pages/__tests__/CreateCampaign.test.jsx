@@ -12,10 +12,17 @@ jest.mock('../../services/api', () => ({
   },
 }));
 
+const mockNavigate = jest.fn();
+
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
 }));
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  sessionStorage.clear();
+});
 
 function renderPage() {
   return render(
@@ -293,5 +300,36 @@ describe('Max Starting Level', () => {
     const select = screen.getByLabelText(/max starting level/i);
     const values = Array.from(select.options).map((o) => Number(o.value));
     expect(values).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sessionStorage draft persistence — issue #82
+// ---------------------------------------------------------------------------
+
+describe('sessionStorage draft persistence', () => {
+  test('restores campaign name from sessionStorage on mount', () => {
+    sessionStorage.setItem('campaign_draft', JSON.stringify({ name: 'Saved Campaign' }));
+    renderPage();
+    expect(screen.getByLabelText(/campaign name/i).value).toBe('Saved Campaign');
+  });
+
+  test('saves form to sessionStorage when name changes', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/campaign name/i), 'My Campaign');
+    const stored = JSON.parse(sessionStorage.getItem('campaign_draft') || '{}');
+    expect(stored.name).toBe('My Campaign');
+  });
+
+  test('clears sessionStorage on successful campaign creation', async () => {
+    sessionStorage.setItem('campaign_draft', JSON.stringify({ name: 'Draft' }));
+    api.createCampaign.mockResolvedValue({ campaign_id: 'new-id' });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/campaign name/i), 'Draft');
+    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(sessionStorage.getItem('campaign_draft')).toBeNull();
   });
 });

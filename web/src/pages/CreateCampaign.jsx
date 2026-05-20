@@ -18,6 +18,17 @@ const ABILITY_SCORE_METHODS = [
   { value: 'roll_for_stats', label: 'Roll for Stats', description: 'Roll 4d6 drop lowest for each score' },
 ];
 
+const STORAGE_KEY = 'campaign_draft';
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULTS = {
   name: '',
   party_name: '',
@@ -229,7 +240,16 @@ function GenerateButton({ field, generating, onGenerate }) {
 export default function CreateCampaign() {
   const navigate = useNavigate();
   const { setCenterContent } = useNavbar();
-  const [form, setForm] = useState(DEFAULTS);
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    if (!draft) return DEFAULTS;
+    return {
+      ...DEFAULTS,
+      ...draft,
+      schedule: { ...DEFAULTS.schedule, ...(draft.schedule || {}) },
+      ability_score_rules: { ...DEFAULTS.ability_score_rules, ...(draft.ability_score_rules || {}) },
+    };
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(null);
@@ -240,6 +260,10 @@ export default function CreateCampaign() {
     );
     return () => setCenterContent(null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch {}
+  }, [form]);
 
   const setSchedule = (key, value) =>
     setForm((f) => ({ ...f, schedule: { ...f.schedule, [key]: value } }));
@@ -274,6 +298,7 @@ export default function CreateCampaign() {
     setError(null);
     try {
       const campaign = await api.createCampaign(form);
+      sessionStorage.removeItem(STORAGE_KEY);
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {
       console.error('Create campaign failed:', err);

@@ -1,13 +1,28 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CLASSES from '../../data/classData';
 
 const FLIP_DURATION = 350;
 
-export default function ClassDiePicker({ onChange }) {
-  const [index, setIndex] = useState(0);
+function classIndex(name) {
+  if (!name) return 0;
+  const i = CLASSES.findIndex((c) => c.name === name);
+  return i !== -1 ? i : 0;
+}
+
+export default function ClassDiePicker({ onChange, value }) {
+  const [index, setIndex] = useState(() => classIndex(value));
   const [animating, setAnimating] = useState(false);
-  const [displayIndex, setDisplayIndex] = useState(0);
+  const [displayIndex, setDisplayIndex] = useState(() => classIndex(value));
   const dieRef = useRef(null);
+
+  useEffect(() => {
+    if (!value) return;
+    const i = classIndex(value);
+    if (i !== index) {
+      setIndex(i);
+      setDisplayIndex(i);
+    }
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advance = (dir) => {
     if (animating) return;

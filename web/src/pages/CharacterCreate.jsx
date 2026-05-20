@@ -140,12 +140,14 @@ export default function CharacterCreate({ user }) {
 
   useEffect(() => {
     if (!campaignLoaded) return;
+    let cancelled = false;
     api.getDraft(campaignId)
       .then((draft) => {
+        if (cancelled) return;
         if (!draft) {
           return api.getCharacter(campaignId)
             .then((char) => {
-              if (!char) return;
+              if (cancelled || !char) return;
               setIdentity({
                 name: char.name || '',
                 race: char.race || RACES[0],
@@ -180,6 +182,7 @@ export default function CharacterCreate({ user }) {
         });
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, [campaignLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const myEmail = user?.userDetails;
@@ -360,7 +363,7 @@ export default function CharacterCreate({ user }) {
 
       {step === 1 && maxLevel !== null && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center' }}>
-          <ClassDiePicker onChange={(name) => setIdentity((i) => ({ ...i, class_name: name }))} />
+          <ClassDiePicker value={identity.class_name} onChange={(name) => setIdentity((i) => ({ ...i, class_name: name }))} />
 
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
             <h3 style={{ margin: 0, color: 'var(--gold)' }}>Identity</h3>

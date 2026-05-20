@@ -101,14 +101,6 @@ export function useAbilityScoreEngine({ ability_score_method, ability_score_rule
       return updated.sort((a, b) => b - a);
     });
     setRollResults((prev) => [...prev, newResult]);
-    // If any ability had the old value assigned, unassign it
-    setScores((prev) => {
-      const next = { ...prev };
-      for (const key of ABILITY_KEYS) {
-        if (next[key] === oldValue) next[key] = null;
-      }
-      return next;
-    });
   }, []);
 
   // ── Mark an ability as rerolled (badge flag) ──────────────────────────────

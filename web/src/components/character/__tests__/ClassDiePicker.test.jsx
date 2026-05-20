@@ -44,6 +44,18 @@ test('arrow buttons have accessible labels', () => {
   expect(screen.getByRole('button', { name: /next class/i })).toBeInTheDocument();
 });
 
+test('renders the class matching the value prop', () => {
+  render(<ClassDiePicker value="Wizard" />);
+  expect(screen.getByText('Wizard')).toBeInTheDocument();
+});
+
+test('updates displayed class when value prop changes', () => {
+  const { rerender } = render(<ClassDiePicker value="Barbarian" />);
+  expect(screen.getByText('Barbarian')).toBeInTheDocument();
+  rerender(<ClassDiePicker value="Druid" />);
+  expect(screen.getByText('Druid')).toBeInTheDocument();
+});
+
 test('right arrow from last class wraps to Barbarian', async () => {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
   const onChange = jest.fn();

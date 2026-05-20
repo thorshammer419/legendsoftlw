@@ -120,12 +120,16 @@ describe('useAbilityScoreEngine — Roll for Stats', () => {
     expect(result.current.availableChips).toContain(15);
   });
 
-  it('rerollChip unassigns ability that held the old value', () => {
+  it('rerollChip does not unassign a score when a separate pool chip has the same value', () => {
     const { result } = renderHook(() => useAbilityScoreEngine(ROLL_RULES));
-    act(() => result.current.recordRoll({ rolls: [4, 3, 2, 1], kept: [4, 3, 2], dropped: [1], sum: 9 }));
-    act(() => result.current.assign('strength', 9));
-    act(() => result.current.rerollChip(9, { rolls: [6, 5, 4, 1], kept: [6, 5, 4], dropped: [1], sum: 15 }));
-    expect(result.current.scores.strength).toBeNull();
+    act(() => result.current.recordRoll({ rolls: [4, 3, 2, 1], kept: [4, 3, 2], dropped: [1], sum: 10 }));
+    act(() => result.current.recordRoll({ rolls: [5, 3, 2, 1], kept: [5, 3, 2], dropped: [1], sum: 10 }));
+    act(() => result.current.assign('strength', 10));
+    // Pool still contains one 10 — rerolling that pool chip
+    act(() => result.current.rerollChip(10, { rolls: [6, 5, 4, 1], kept: [6, 5, 4], dropped: [1], sum: 15 }));
+    expect(result.current.scores.strength).toBe(10); // assigned score must be untouched
+    expect(result.current.availableChips).not.toContain(10);
+    expect(result.current.availableChips).toContain(15);
   });
 });
 

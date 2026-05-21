@@ -322,14 +322,14 @@ describe('sessionStorage draft persistence', () => {
     expect(stored.name).toBe('My Campaign');
   });
 
-  test('clears sessionStorage on successful campaign creation', async () => {
-    sessionStorage.setItem('campaign_draft', JSON.stringify({ name: 'Draft' }));
+  test('retains sessionStorage after successful creation so back-navigation restores form', async () => {
     api.createCampaign.mockResolvedValue({ campaign_id: 'new-id' });
     const user = userEvent.setup();
     renderPage();
-    await user.type(screen.getByLabelText(/campaign name/i), 'Draft');
+    await user.type(screen.getByLabelText(/campaign name/i), 'My Campaign');
     await user.click(screen.getByRole('button', { name: /create campaign/i }));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
-    expect(sessionStorage.getItem('campaign_draft')).toBeNull();
+    const stored = JSON.parse(sessionStorage.getItem('campaign_draft') || '{}');
+    expect(stored.name).toBe('My Campaign');
   });
 });

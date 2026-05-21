@@ -298,6 +298,7 @@ export default function CreateCampaign() {
     setError(null);
     try {
       const campaign = await api.createCampaign(form);
+      try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch {}
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {
       console.error('Create campaign failed:', err);

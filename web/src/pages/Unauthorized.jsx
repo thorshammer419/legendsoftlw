@@ -42,10 +42,10 @@ export default function Unauthorized() {
         }}>
           To request access, contact{' '}
           <a
-            href="mailto:markerickson@rocketmail.com"
+            href="mailto:admin@legendsoftlw.app"
             style={{ color: '#9090d0', textDecoration: 'underline' }}
           >
-            markerickson@rocketmail.com
+            admin@legendsoftlw.app
           </a>
         </p>
 

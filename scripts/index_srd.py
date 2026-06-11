@@ -3,9 +3,9 @@ One-time script to chunk and index SRD content into Azure AI Search.
 Run once during initial setup, or re-run to refresh the index.
 
 Usage:
-    export SEARCH_ENDPOINT=https://legendsoftlw-search.search.windows.net
+    export SEARCH_ENDPOINT=https://<your-search-resource>.search.windows.net
     export SEARCH_API_KEY=your_key
-    export OPENAI_ENDPOINT=https://oai-thorshammer419-centralus.openai.azure.com/
+    export OPENAI_ENDPOINT=https://<your-openai-resource>.openai.azure.com/
     export OPENAI_API_KEY=your_key
     python scripts/index_srd.py
 """

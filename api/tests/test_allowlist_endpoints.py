@@ -15,7 +15,7 @@ import azure.functions as func
 
 MODULE = "functions.webhook_http"
 
-ADMIN_EMAIL = "markerickson@rocketmail.com"
+ADMIN_EMAIL = "admin@example.com"
 USER_EMAIL = "player@example.com"
 
 ADMIN_PRINCIPAL = base64.b64encode(json.dumps({

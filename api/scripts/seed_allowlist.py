@@ -16,9 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from functions.activities.cosmos import upsert_allowed_user
 
 ADMIN_EMAILS = [
-    "markerickson@rocketmail.com",
-    "erickson.mark.a@gmail.com",
-    "thorshammer419@markericksonrocketmail.onmicrosoft.com",
+    # Replace with your system admin email addresses before running.
+    "admin1@example.com",
+    "admin2@example.com",
 ]
 
 for email in ADMIN_EMAILS:

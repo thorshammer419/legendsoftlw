@@ -422,6 +422,25 @@ describe('Continue to Character Create', () => {
     expect(sessionStorage.getItem('campaign_rules_locked')).toBe('true');
   });
 
+  test('does not lock rules when lock flag is stale but no campaign ID exists', () => {
+    sessionStorage.setItem('campaign_rules_locked', 'true');
+    // no campaign_draft_id
+    renderPage();
+    expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /point buy/i })).not.toBeDisabled();
+  });
+
+  test('clears stale rules lock when new campaign is successfully created', async () => {
+    sessionStorage.setItem('campaign_rules_locked', 'true');
+    api.createCampaign.mockResolvedValue({ campaign_id: 'brand-new' });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/campaign name/i), 'Fresh Campaign');
+    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(sessionStorage.getItem('campaign_rules_locked')).toBeNull();
+  });
+
   test('skips lock-rules confirmation and navigates directly when rules already locked', async () => {
     sessionStorage.setItem('campaign_draft_id', 'existing-camp');
     sessionStorage.setItem('campaign_rules_locked', 'true');

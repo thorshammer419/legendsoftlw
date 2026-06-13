@@ -262,7 +262,10 @@ export default function CreateCampaign() {
     try { return sessionStorage.getItem(CAMPAIGN_ID_KEY) || null; } catch { return null; }
   });
   const [rulesLocked] = useState(() => {
-    try { return sessionStorage.getItem(RULES_LOCKED_KEY) === 'true'; } catch { return false; }
+    try {
+      return sessionStorage.getItem(RULES_LOCKED_KEY) === 'true'
+          && !!sessionStorage.getItem(CAMPAIGN_ID_KEY);
+    } catch { return false; }
   });
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -297,6 +300,7 @@ export default function CreateCampaign() {
       await api.deleteCampaign(existingCampaignId);
       try { sessionStorage.removeItem(CAMPAIGN_ID_KEY); } catch {}
       try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+      try { sessionStorage.removeItem(RULES_LOCKED_KEY); } catch {}
       navigate('/');
     } catch (err) {
       console.error('Cancel failed:', err);
@@ -339,6 +343,7 @@ export default function CreateCampaign() {
     try {
       const campaign = await api.createCampaign(form);
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch {}
+      try { sessionStorage.removeItem(RULES_LOCKED_KEY); } catch {}
       try { sessionStorage.setItem(CAMPAIGN_ID_KEY, campaign.campaign_id); } catch {}
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {

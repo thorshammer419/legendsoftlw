@@ -71,6 +71,7 @@ export default function CharacterCreate({ user }) {
   const { setCenterContent, setBackOverride } = useNavbar();
 
   const [step, setStep] = useState(() => searchParams.get('step') === '2' ? 2 : 1);
+  const [draftRestored, setDraftRestored] = useState(() => searchParams.get('step') !== '2');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [maxLevel, setMaxLevel] = useState(null); // null = loading
@@ -142,37 +143,32 @@ export default function CharacterCreate({ user }) {
   useEffect(() => {
     if (!campaignLoaded) return;
     let cancelled = false;
-    api.getDraft(campaignId)
-      .then((draft) => {
+    (async () => {
+      try {
+        const draft = await api.getDraft(campaignId);
         if (cancelled) return;
         if (!draft) {
-          return api.getCharacter(campaignId)
-            .then((char) => {
-              if (cancelled || !char) return;
-              setIdentity({
-                name: char.name || '',
-                race: char.race || RACES[0],
-                class_name: char.class || CLASSES[0].name,
-                background: char.background || BACKGROUNDS[0],
-                alignment: char.alignment || 'True Neutral',
-                level: char.level || 1,
-                backstory: char.backstory || '',
-              });
-              const rollResults = abilityScoreMethod === 'roll_for_stats'
-                ? ABILITY_KEYS.map((k) => ({
-                    rolls: [char.ability_scores[k]],
-                    kept: [char.ability_scores[k]],
-                    dropped: [],
-                    sum: char.ability_scores[k],
-                  }))
-                : [];
-              engine.restoreFromDraft({
-                scores: char.ability_scores,
-                availableChips: [],
-                rollResults,
-              });
-            })
-            .catch(() => {});
+          const char = await api.getCharacter(campaignId).catch(() => null);
+          if (cancelled || !char) return;
+          setIdentity({
+            name: char.name || '',
+            race: char.race || RACES[0],
+            class_name: char.class || CLASSES[0].name,
+            background: char.background || BACKGROUNDS[0],
+            alignment: char.alignment || 'True Neutral',
+            level: char.level || 1,
+            backstory: char.backstory || '',
+          });
+          const rollResults = abilityScoreMethod === 'roll_for_stats'
+            ? ABILITY_KEYS.map((k) => ({
+                rolls: [char.ability_scores[k]],
+                kept: [char.ability_scores[k]],
+                dropped: [],
+                sum: char.ability_scores[k],
+              }))
+            : [];
+          engine.restoreFromDraft({ scores: char.ability_scores, availableChips: [], rollResults });
+          return;
         }
         if (draft.identity) setIdentity(draft.identity);
         if (draft.step === 2) setStep(2);
@@ -181,8 +177,12 @@ export default function CharacterCreate({ user }) {
           availableChips: draft.available_chips,
           rollResults: draft.roll_results,
         });
-      })
-      .catch(() => {});
+      } catch {
+        // ignore errors, fall through to finally
+      } finally {
+        if (!cancelled) setDraftRestored(true);
+      }
+    })();
     return () => { cancelled = true; };
   }, [campaignLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -236,12 +236,12 @@ export default function CharacterCreate({ user }) {
 
   useEffect(() => {
     if (step !== 2) {
-      setBackOverride(null);
+      setBackOverride(iAmCreator ? '/campaigns/new' : '/');
       return () => setBackOverride(null);
     }
     setBackOverride(() => handleBack);
     return () => setBackOverride(null);
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const totalSteps = iAmCreator ? 3 : 2;
@@ -453,7 +453,13 @@ export default function CharacterCreate({ user }) {
         </div>
       )}
 
-      {step === 2 && (
+      {step === 2 && !draftRestored && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <div className="spinner" />
+        </div>
+      )}
+
+      {step === 2 && draftRestored && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <h3 style={{ margin: 0, color: 'var(--gold)' }}>Ability Scores</h3>

@@ -107,6 +107,21 @@ function renderPageAtStep2(user = 'player@example.com') {
   );
 }
 
+function renderPageWithBackSlot(userEmail = 'player@example.com') {
+  mockLobbyEventHandlers = [];
+  return render(
+    <NavbarProvider>
+      <MemoryRouter initialEntries={['/campaigns/test-campaign/character/create']}>
+        <NavbarCenterSlot />
+        <NavbarBackSlot />
+        <Routes>
+          <Route path="/campaigns/:campaignId/character/create" element={<CharacterCreate user={{ userDetails: userEmail }} />} />
+        </Routes>
+      </MemoryRouter>
+    </NavbarProvider>
+  );
+}
+
 function renderPageAtStep2WithBackSlot(user = 'player@example.com') {
   mockLobbyEventHandlers = [];
   return render(
@@ -983,5 +998,64 @@ describe('Draft save on unmount', () => {
       'test-campaign',
       expect.objectContaining({ step: 2 })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step 1 back navigation — explicit destinations
+// ---------------------------------------------------------------------------
+
+describe('Step 1 Navbar back navigation', () => {
+  test('navigates creator back to campaign setup screen', async () => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: ['creator@example.com'] });
+    const user = userEvent.setup();
+    renderPageWithBackSlot('creator@example.com');
+    // Wait for campaign to load so iAmCreator is resolved
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/new');
+  });
+
+  test('navigates player back to Dashboard', async () => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: ['creator@example.com'] });
+    const user = userEvent.setup();
+    renderPageWithBackSlot('player@example.com');
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step 2 loading spinner — no flash of empty ability scores
+// ---------------------------------------------------------------------------
+
+describe('Step 2 loading spinner', () => {
+  test('shows spinner in step 2 while draft is loading', async () => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.getDraft.mockReturnValue(new Promise(() => {})); // never resolves
+    renderPageAtStep2();
+    await waitFor(() => expect(api.getDraft).toHaveBeenCalled());
+    expect(document.querySelector('.spinner')).toBeInTheDocument();
+  });
+
+  test('hides spinner and shows ability scores after draft loads', async () => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.getDraft.mockResolvedValue({ step: 2, identity: null, scores: {}, available_chips: [], roll_results: [] });
+    renderPageAtStep2();
+    await waitFor(() => expect(screen.getByText(/ability scores/i)).toBeInTheDocument());
+    expect(document.querySelector('.spinner')).not.toBeInTheDocument();
+  });
+
+  test('no spinner in step 2 when arriving via Next button from step 1', async () => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.getDraft.mockReturnValue(new Promise(() => {})); // never resolves, but draftRestored starts true
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/character name/i), 'Aldric');
+    await user.click(screen.getByRole('button', { name: /ability scores/i }));
+    await waitFor(() => expect(screen.getByText(/ability scores/i)).toBeInTheDocument());
+    expect(document.querySelector('.spinner')).not.toBeInTheDocument();
   });
 });

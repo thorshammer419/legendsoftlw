@@ -336,7 +336,7 @@ export default function CreateCampaign() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
     setError(null);
@@ -588,18 +588,19 @@ export default function CreateCampaign() {
           )}
         </div>
 
-        {existingCampaignId && (
-          <button
-            type="button"
-            className="btn btn-primary btn-full"
-            onClick={() => rulesLocked ? navigate(`/campaigns/${existingCampaignId}/character`) : setConfirmProceed(true)}
-          >
-            Continue to Character Create →
-          </button>
-        )}
-
-        <button type="submit" className="btn btn-primary btn-full" disabled={saving || !form.name.trim()}>
-          {saving ? 'Creating...' : 'Create Campaign →'}
+        <button
+          type="button"
+          className="btn btn-primary btn-full"
+          disabled={saving || (!existingCampaignId && !form.name.trim())}
+          onClick={() => {
+            if (existingCampaignId) {
+              rulesLocked ? navigate(`/campaigns/${existingCampaignId}/character`) : setConfirmProceed(true);
+            } else {
+              handleSubmit();
+            }
+          }}
+        >
+          {saving ? 'Creating...' : 'Continue to Character Create →'}
         </button>
       </form>
     </div>

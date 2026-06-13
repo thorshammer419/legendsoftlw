@@ -352,7 +352,7 @@ describe('sessionStorage draft persistence', () => {
     const user = userEvent.setup();
     renderPage();
     await user.type(screen.getByLabelText(/campaign name/i), 'My Campaign');
-    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
     const stored = JSON.parse(sessionStorage.getItem('campaign_draft') || '{}');
     expect(stored.name).toBe('My Campaign');
@@ -363,7 +363,7 @@ describe('sessionStorage draft persistence', () => {
     const user = userEvent.setup();
     renderPage();
     await user.type(screen.getByLabelText(/campaign name/i), 'My Campaign');
-    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
     expect(sessionStorage.getItem('campaign_draft_id')).toBe('camp-abc');
   });
@@ -374,15 +374,24 @@ describe('sessionStorage draft persistence', () => {
 // ---------------------------------------------------------------------------
 
 describe('Continue to Character Create', () => {
-  test('does not show Continue button when no campaign ID in sessionStorage', () => {
-    renderPage();
-    expect(screen.queryByRole('button', { name: /continue to character create/i })).not.toBeInTheDocument();
-  });
-
-  test('shows Continue button when a campaign ID is stored in sessionStorage', () => {
-    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+  test('Continue button is always visible', () => {
     renderPage();
     expect(screen.getByRole('button', { name: /continue to character create/i })).toBeInTheDocument();
+  });
+
+  test('clicking Continue with no existing campaign creates the campaign and navigates', async () => {
+    api.createCampaign.mockResolvedValue({ campaign_id: 'fresh-id' });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/campaign name/i), 'New Adventure');
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/campaigns/fresh-id/character'));
+    expect(api.createCampaign).toHaveBeenCalled();
+  });
+
+  test('clicking Continue with no existing campaign is disabled when name is empty', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /continue to character create/i })).toBeDisabled();
   });
 
   test('clicking Continue shows lock-rules confirmation instead of navigating immediately', async () => {
@@ -436,7 +445,7 @@ describe('Continue to Character Create', () => {
     const user = userEvent.setup();
     renderPage();
     await user.type(screen.getByLabelText(/campaign name/i), 'Fresh Campaign');
-    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
     expect(sessionStorage.getItem('campaign_rules_locked')).toBeNull();
   });

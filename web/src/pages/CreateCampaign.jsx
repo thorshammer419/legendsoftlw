@@ -19,6 +19,7 @@ const ABILITY_SCORE_METHODS = [
 ];
 
 const STORAGE_KEY = 'campaign_draft';
+const CAMPAIGN_ID_KEY = 'campaign_draft_id';
 
 function loadDraft() {
   try {
@@ -250,6 +251,9 @@ export default function CreateCampaign() {
       ability_score_rules: { ...DEFAULTS.ability_score_rules, ...(draft.ability_score_rules || {}) },
     };
   });
+  const [existingCampaignId] = useState(() => {
+    try { return sessionStorage.getItem(CAMPAIGN_ID_KEY) || null; } catch { return null; }
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(null);
@@ -299,6 +303,7 @@ export default function CreateCampaign() {
     try {
       const campaign = await api.createCampaign(form);
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch {}
+      try { sessionStorage.setItem(CAMPAIGN_ID_KEY, campaign.campaign_id); } catch {}
       navigate(`/campaigns/${campaign.campaign_id}/character`);
     } catch (err) {
       console.error('Create campaign failed:', err);
@@ -525,6 +530,16 @@ export default function CreateCampaign() {
             </div>
           )}
         </div>
+
+        {existingCampaignId && (
+          <button
+            type="button"
+            className="btn btn-primary btn-full"
+            onClick={() => navigate(`/campaigns/${existingCampaignId}/character`)}
+          >
+            Continue to Character Create →
+          </button>
+        )}
 
         <button type="submit" className="btn btn-primary btn-full" disabled={saving || !form.name.trim()}>
           {saving ? 'Creating...' : 'Create Campaign →'}

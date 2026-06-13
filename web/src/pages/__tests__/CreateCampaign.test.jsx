@@ -332,4 +332,39 @@ describe('sessionStorage draft persistence', () => {
     const stored = JSON.parse(sessionStorage.getItem('campaign_draft') || '{}');
     expect(stored.name).toBe('My Campaign');
   });
+
+  test('stores campaign ID in sessionStorage after successful creation', async () => {
+    api.createCampaign.mockResolvedValue({ campaign_id: 'camp-abc' });
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(screen.getByLabelText(/campaign name/i), 'My Campaign');
+    await user.click(screen.getByRole('button', { name: /create campaign/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalled());
+    expect(sessionStorage.getItem('campaign_draft_id')).toBe('camp-abc');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Continue to Character Create — issue #84
+// ---------------------------------------------------------------------------
+
+describe('Continue to Character Create', () => {
+  test('does not show Continue button when no campaign ID in sessionStorage', () => {
+    renderPage();
+    expect(screen.queryByRole('button', { name: /continue to character create/i })).not.toBeInTheDocument();
+  });
+
+  test('shows Continue button when a campaign ID is stored in sessionStorage', () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    renderPage();
+    expect(screen.getByRole('button', { name: /continue to character create/i })).toBeInTheDocument();
+  });
+
+  test('clicking Continue navigates to the stored campaign character create route', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/existing-camp/character');
+  });
 });

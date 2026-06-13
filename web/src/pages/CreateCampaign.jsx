@@ -20,6 +20,7 @@ const ABILITY_SCORE_METHODS = [
 
 const STORAGE_KEY = 'campaign_draft';
 const CAMPAIGN_ID_KEY = 'campaign_draft_id';
+const RULES_LOCKED_KEY = 'campaign_rules_locked';
 
 function loadDraft() {
   try {
@@ -68,7 +69,7 @@ const SUBSETTING_STYLE = {
   gap: 10,
 };
 
-function StandardArraySettings({ rules, setRules }) {
+function StandardArraySettings({ rules, setRules, disabled }) {
   const arr = rules.standard_array;
   return (
     <div style={SUBSETTING_STYLE}>
@@ -86,7 +87,8 @@ function StandardArraySettings({ rules, setRules }) {
               next[i] = Math.min(20, Math.max(1, Number(e.target.value) || 1));
               setRules('standard_array', next);
             }}
-            style={{ width: 48, textAlign: 'center' }}
+            disabled={disabled}
+            style={{ width: 48, textAlign: 'center', opacity: disabled ? 0.5 : 1 }}
             aria-label={`Array value ${i + 1}`}
           />
         ))}
@@ -95,7 +97,7 @@ function StandardArraySettings({ rules, setRules }) {
   );
 }
 
-function PointBuySettings({ rules, setRules }) {
+function PointBuySettings({ rules, setRules, disabled }) {
   const minScore = rules.point_buy_min ?? 8;
   const maxScore = rules.point_buy_max ?? 15;
   return (
@@ -109,7 +111,8 @@ function PointBuySettings({ rules, setRules }) {
             max={72}
             value={rules.point_buy_points}
             onChange={(e) => setRules('point_buy_points', Math.min(72, Math.max(1, Number(e.target.value) || 1)))}
-            style={{ width: 72 }}
+            disabled={disabled}
+            style={{ width: 72, opacity: disabled ? 0.5 : 1 }}
             aria-label="Point buy budget"
           />
         </div>
@@ -124,7 +127,8 @@ function PointBuySettings({ rules, setRules }) {
               const val = Math.min(maxScore - 1, Math.max(1, Number(e.target.value) || 1));
               setRules('point_buy_min', val);
             }}
-            style={{ width: 60 }}
+            disabled={disabled}
+            style={{ width: 60, opacity: disabled ? 0.5 : 1 }}
             aria-label="Point buy minimum score"
           />
         </div>
@@ -139,7 +143,8 @@ function PointBuySettings({ rules, setRules }) {
               const val = Math.min(20, Math.max(minScore + 1, Number(e.target.value) || (minScore + 1)));
               setRules('point_buy_max', val);
             }}
-            style={{ width: 60 }}
+            disabled={disabled}
+            style={{ width: 60, opacity: disabled ? 0.5 : 1 }}
             aria-label="Point buy maximum score"
           />
         </div>
@@ -148,7 +153,7 @@ function PointBuySettings({ rules, setRules }) {
   );
 }
 
-function RollSettings({ rules, setRules }) {
+function RollSettings({ rules, setRules, disabled }) {
   const [keepMsg, setKeepMsg] = useState(false);
   const timerRef = useRef(null);
 
@@ -185,7 +190,8 @@ function RollSettings({ rules, setRules }) {
             min={1}
             value={rules.roll_dice}
             onChange={(e) => setDice(e.target.value)}
-            style={{ width: 64 }}
+            disabled={disabled}
+            style={{ width: 64, opacity: disabled ? 0.5 : 1 }}
             aria-label="Dice to roll"
           />
         </div>
@@ -196,7 +202,8 @@ function RollSettings({ rules, setRules }) {
             min={1}
             value={rules.roll_keep}
             onChange={(e) => setKeep(e.target.value)}
-            style={{ width: 64 }}
+            disabled={disabled}
+            style={{ width: 64, opacity: disabled ? 0.5 : 1 }}
             aria-label="Dice to keep"
           />
           {keepMsg && (
@@ -253,6 +260,9 @@ export default function CreateCampaign() {
   });
   const [existingCampaignId] = useState(() => {
     try { return sessionStorage.getItem(CAMPAIGN_ID_KEY) || null; } catch { return null; }
+  });
+  const [rulesLocked] = useState(() => {
+    try { return sessionStorage.getItem(RULES_LOCKED_KEY) === 'true'; } catch { return false; }
   });
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -440,33 +450,48 @@ export default function CreateCampaign() {
 
         {/* Character Rules */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <h3 style={{ margin: 0, color: 'var(--gold)' }}>Character Rules</h3>
+          <h3 style={{ margin: 0, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            Character Rules
+            {rulesLocked && (
+              <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                locked
+              </span>
+            )}
+          </h3>
           <div>
             <label className="label">Ability Score Method</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-              {ABILITY_SCORE_METHODS.map((method) => (
-                <div key={method.value}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${form.ability_score_method === method.value ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setForm((f) => ({ ...f, ability_score_method: method.value }))}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '10px 14px', textAlign: 'left', width: '100%' }}
-                  >
-                    <span style={{ fontWeight: 600 }}>{method.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 2 }}>{method.description}</span>
-                  </button>
+              {ABILITY_SCORE_METHODS.map((method) => {
+                const isSelected = form.ability_score_method === method.value;
+                return (
+                  <div key={method.value}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => !rulesLocked && setForm((f) => ({ ...f, ability_score_method: method.value }))}
+                      disabled={rulesLocked && !isSelected}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                        height: 'auto', padding: '10px 14px', textAlign: 'left', width: '100%',
+                        ...(rulesLocked && isSelected ? { border: '2px solid var(--gold)', boxShadow: '0 0 0 1px var(--gold)' } : {}),
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{method.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8, marginTop: 2 }}>{method.description}</span>
+                    </button>
 
-                  {form.ability_score_method === 'standard_array' && method.value === 'standard_array' && (
-                    <StandardArraySettings rules={form.ability_score_rules} setRules={setRules} />
-                  )}
-                  {form.ability_score_method === 'point_buy' && method.value === 'point_buy' && (
-                    <PointBuySettings rules={form.ability_score_rules} setRules={setRules} />
-                  )}
-                  {form.ability_score_method === 'roll_for_stats' && method.value === 'roll_for_stats' && (
-                    <RollSettings rules={form.ability_score_rules} setRules={setRules} />
-                  )}
-                </div>
-              ))}
+                    {form.ability_score_method === 'standard_array' && method.value === 'standard_array' && (
+                      <StandardArraySettings rules={form.ability_score_rules} setRules={setRules} disabled={rulesLocked} />
+                    )}
+                    {form.ability_score_method === 'point_buy' && method.value === 'point_buy' && (
+                      <PointBuySettings rules={form.ability_score_rules} setRules={setRules} disabled={rulesLocked} />
+                    )}
+                    {form.ability_score_method === 'roll_for_stats' && method.value === 'roll_for_stats' && (
+                      <RollSettings rules={form.ability_score_rules} setRules={setRules} disabled={rulesLocked} />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -562,7 +587,7 @@ export default function CreateCampaign() {
           <button
             type="button"
             className="btn btn-primary btn-full"
-            onClick={() => setConfirmProceed(true)}
+            onClick={() => rulesLocked ? navigate(`/campaigns/${existingCampaignId}/character`) : setConfirmProceed(true)}
           >
             Continue to Character Create →
           </button>
@@ -587,7 +612,10 @@ export default function CreateCampaign() {
             <button className="btn btn-secondary btn-sm" onClick={() => setConfirmProceed(false)}>
               Stay Here
             </button>
-            <button className="btn btn-primary btn-sm" onClick={() => navigate(`/campaigns/${existingCampaignId}/character`)}>
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              try { sessionStorage.setItem(RULES_LOCKED_KEY, 'true'); } catch {}
+              navigate(`/campaigns/${existingCampaignId}/character`);
+            }}>
               Proceed to Character Create →
             </button>
           </div>

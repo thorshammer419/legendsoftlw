@@ -412,6 +412,41 @@ describe('Continue to Character Create', () => {
     await user.click(screen.getByRole('button', { name: /proceed to character create/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/campaigns/existing-camp/character');
   });
+
+  test('confirming lock-rules sets campaign_rules_locked in sessionStorage', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    await user.click(screen.getByRole('button', { name: /proceed to character create/i }));
+    expect(sessionStorage.getItem('campaign_rules_locked')).toBe('true');
+  });
+
+  test('skips lock-rules confirmation and navigates directly when rules already locked', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    sessionStorage.setItem('campaign_rules_locked', 'true');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/campaigns/existing-camp/character');
+    expect(screen.queryByRole('button', { name: /stay here/i })).not.toBeInTheDocument();
+  });
+
+  test('non-selected ability score methods are disabled when rules are locked', () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    sessionStorage.setItem('campaign_rules_locked', 'true');
+    renderPage();
+    expect(screen.getByRole('button', { name: /point buy/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /roll for stats/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /standard array/i })).not.toBeDisabled();
+  });
+
+  test('shows locked indicator in Character Rules heading when rules are locked', () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    sessionStorage.setItem('campaign_rules_locked', 'true');
+    renderPage();
+    expect(screen.getByText(/locked/i)).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------

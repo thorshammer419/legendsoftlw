@@ -133,9 +133,10 @@ export default function CharacterCreate({ user }) {
         setIdentity((i) => ({ ...i, level: max }));
         setAbilityScoreMethod(c.ability_score_method ?? 'standard_array');
         setAbilityScoreRules(c.ability_score_rules ?? { standard_array: [15, 14, 13, 12, 10, 8] });
+        campaignLoadedRef.current = true;
         setCampaignLoaded(true);
       })
-      .catch(() => { setMaxLevel(20); setCampaignLoaded(true); });
+      .catch(() => { setMaxLevel(20); campaignLoadedRef.current = true; setCampaignLoaded(true); });
   }, [campaignId]);
 
   useEffect(() => {
@@ -197,6 +198,9 @@ export default function CharacterCreate({ user }) {
     roll_results: engine.rollResults,
   };
 
+  const skipDraftSaveRef = useRef(false);
+  const campaignLoadedRef = useRef(false);
+
   useEffect(() => {
     const handleBeforeUnload = () => {
       fetch(`/api/campaigns/${campaignId}/character/draft`, {
@@ -208,6 +212,16 @@ export default function CharacterCreate({ user }) {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save draft when navigating away normally (e.g. Navbar back from step 1 → New Campaign).
+  // Skipped on leave/cancel/submit — those paths manage the draft themselves.
+  // Uses api.saveDraft (not keepalive fetch) because SPA navigation keeps the page alive.
+  useEffect(() => {
+    return () => {
+      if (skipDraftSaveRef.current || !campaignLoadedRef.current) return;
+      api.saveDraft(campaignId, draftRef.current).catch(() => {});
+    };
   }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNext = async () => {
@@ -281,6 +295,7 @@ export default function CharacterCreate({ user }) {
       } else {
         await api.leaveCampaign(campaignId);
       }
+      skipDraftSaveRef.current = true;
       navigate('/', { replace: true });
     } catch (err) {
       console.error('Action failed:', err);
@@ -330,6 +345,8 @@ export default function CharacterCreate({ user }) {
         ...(hasRerolled && { rerolled: true }),
       };
       await api.saveCharacter(campaignId, character);
+      await api.saveDraft(campaignId, { ...draftRef.current, step: 2 }).catch(() => {});
+      skipDraftSaveRef.current = true;
       navigate(`/campaigns/${campaignId}/lobby`);
     } catch (err) {
       setError(err.message);

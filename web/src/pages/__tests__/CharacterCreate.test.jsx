@@ -860,13 +860,14 @@ describe('Draft persistence', () => {
 
   test('beforeunload event saves draft via fetch with keepalive', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: true });
-    renderPage();
+    const { unmount } = renderPage();
     await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
     window.dispatchEvent(new Event('beforeunload'));
     expect(fetchSpy).toHaveBeenCalledWith(
       '/api/campaigns/test-campaign/character/draft',
       expect.objectContaining({ method: 'PUT', keepalive: true })
     );
+    unmount();
     fetchSpy.mockRestore();
   });
 });
@@ -919,6 +920,68 @@ describe('Character restore fallback (no draft)', () => {
     renderPageAtStep2();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /enter the adventure/i })).not.toBeDisabled()
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Draft save on unmount — Issues #1 & #2 from post-#83 report
+// ---------------------------------------------------------------------------
+
+describe('Draft save on unmount', () => {
+  beforeEach(() => {
+    api.getCampaign.mockResolvedValue(SA_CAMPAIGN);
+    api.saveCharacter.mockResolvedValue({});
+  });
+
+  test('saves draft via api.saveDraft on unmount when not leaving or canceling', async () => {
+    const { unmount } = renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/character name/i)).toBeInTheDocument());
+    unmount();
+    expect(api.saveDraft).toHaveBeenCalledWith('test-campaign', expect.any(Object));
+  });
+
+  test('does NOT save draft on unmount after confirming leave', async () => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: [] });
+    api.leaveCampaign.mockResolvedValue({});
+    const user = userEvent.setup();
+    const { unmount } = renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^leave$/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^leave$/i }));
+    await user.click(screen.getByRole('button', { name: /yes, leave campaign/i }));
+    await waitFor(() => expect(api.leaveCampaign).toHaveBeenCalled());
+    api.saveDraft.mockClear();
+    unmount();
+    expect(api.saveDraft).not.toHaveBeenCalled();
+  });
+
+  test('does NOT save draft on unmount after confirming cancel (creator)', async () => {
+    api.getCampaign.mockResolvedValue({ max_starting_level: 1, creator_emails: ['creator@example.com'] });
+    api.deleteCampaign.mockResolvedValue({});
+    const user = userEvent.setup();
+    const { unmount } = renderPageAsCreator();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    await user.click(screen.getByRole('button', { name: /yes, cancel campaign/i }));
+    await waitFor(() => expect(api.deleteCampaign).toHaveBeenCalled());
+    api.saveDraft.mockClear();
+    unmount();
+    expect(api.saveDraft).not.toHaveBeenCalled();
+  });
+
+  test('saves draft with step:2 via api.saveDraft when submitting character to enter adventure', async () => {
+    api.getCampaign.mockResolvedValue(PB_CAMPAIGN);
+    const user = userEvent.setup();
+    renderPage();
+    await goToStep2(user); // handleNext → api.saveDraft call #1
+    await user.click(screen.getByRole('button', { name: /enter the adventure/i }));
+    await waitFor(() => expect(api.saveCharacter).toHaveBeenCalled());
+    // handleSubmit should call api.saveDraft again (call #2) for lobby back-navigation
+    expect(api.saveDraft).toHaveBeenCalledTimes(2);
+    expect(api.saveDraft).toHaveBeenNthCalledWith(
+      2,
+      'test-campaign',
+      expect.objectContaining({ step: 2 })
     );
   });
 });

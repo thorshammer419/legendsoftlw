@@ -3,12 +3,26 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import CreateCampaign from '../CreateCampaign';
 import { api } from '../../services/api';
-import { NavbarProvider } from '../../context/NavbarContext';
+import { NavbarProvider, useNavbar } from '../../context/NavbarContext';
+
+function NavbarBackSlot() {
+  const { backOverride } = useNavbar();
+  if (!backOverride) return null;
+  return (
+    <button
+      data-testid="navbar-back"
+      onClick={() => (typeof backOverride === 'function' ? backOverride() : mockNavigate(backOverride))}
+    >
+      navbar back
+    </button>
+  );
+}
 
 jest.mock('../../services/api', () => ({
   api: {
     createCampaign: jest.fn(),
     generateCampaignField: jest.fn(),
+    deleteCampaign: jest.fn(),
   },
 }));
 
@@ -28,6 +42,17 @@ function renderPage() {
   return render(
     <NavbarProvider>
       <MemoryRouter>
+        <CreateCampaign />
+      </MemoryRouter>
+    </NavbarProvider>
+  );
+}
+
+function renderPageWithBackSlot() {
+  return render(
+    <NavbarProvider>
+      <MemoryRouter>
+        <NavbarBackSlot />
         <CreateCampaign />
       </MemoryRouter>
     </NavbarProvider>
@@ -360,11 +385,78 @@ describe('Continue to Character Create', () => {
     expect(screen.getByRole('button', { name: /continue to character create/i })).toBeInTheDocument();
   });
 
-  test('clicking Continue navigates to the stored campaign character create route', async () => {
+  test('clicking Continue shows lock-rules confirmation instead of navigating immediately', async () => {
     sessionStorage.setItem('campaign_draft_id', 'existing-camp');
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByText(/ability score rules.*locked/i)).toBeInTheDocument();
+  });
+
+  test('dismissing lock-rules confirmation stays on campaign setup', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    await user.click(screen.getByRole('button', { name: /stay here/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.queryByText(/ability score rules.*locked/i)).not.toBeInTheDocument();
+  });
+
+  test('confirming lock-rules confirmation navigates to character create', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'existing-camp');
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /continue to character create/i }));
+    await user.click(screen.getByRole('button', { name: /proceed to character create/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/campaigns/existing-camp/character');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Back navigation — issues #1 + #2
+// ---------------------------------------------------------------------------
+
+describe('Back navigation', () => {
+  test('back navigates to Dashboard when no campaign ID in sessionStorage', async () => {
+    const user = userEvent.setup();
+    renderPageWithBackSlot();
+    await waitFor(() => expect(screen.getByTestId('navbar-back')).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    expect(mockNavigate).toHaveBeenCalledWith('/');
+  });
+
+  test('back shows cancel confirmation when campaign ID is in sessionStorage', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'camp-abc');
+    const user = userEvent.setup();
+    renderPageWithBackSlot();
+    await waitFor(() => expect(screen.getByTestId('navbar-back')).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    expect(screen.getByText(/cancel campaign\?/i)).toBeInTheDocument();
+  });
+
+  test('confirming cancel deletes campaign, clears sessionStorage, and navigates to Dashboard', async () => {
+    api.deleteCampaign.mockResolvedValue({});
+    sessionStorage.setItem('campaign_draft_id', 'camp-abc');
+    const user = userEvent.setup();
+    renderPageWithBackSlot();
+    await waitFor(() => expect(screen.getByTestId('navbar-back')).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    await user.click(screen.getByRole('button', { name: /yes, cancel campaign/i }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+    expect(api.deleteCampaign).toHaveBeenCalledWith('camp-abc');
+    expect(sessionStorage.getItem('campaign_draft_id')).toBeNull();
+  });
+
+  test('dismissing cancel confirmation closes modal without navigating', async () => {
+    sessionStorage.setItem('campaign_draft_id', 'camp-abc');
+    const user = userEvent.setup();
+    renderPageWithBackSlot();
+    await waitFor(() => expect(screen.getByTestId('navbar-back')).toBeInTheDocument());
+    await user.click(screen.getByTestId('navbar-back'));
+    await user.click(screen.getByRole('button', { name: /keep campaign/i }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.queryByText(/cancel campaign\?/i)).not.toBeInTheDocument();
   });
 });

@@ -240,7 +240,7 @@ function GenerateButton({ field, generating, onGenerate }) {
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
-  const { setCenterContent } = useNavbar();
+  const { setCenterContent, setBackOverride } = useNavbar();
   const [form, setForm] = useState(() => {
     const draft = loadDraft();
     if (!draft) return DEFAULTS;
@@ -255,8 +255,11 @@ export default function CreateCampaign() {
     try { return sessionStorage.getItem(CAMPAIGN_ID_KEY) || null; } catch { return null; }
   });
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState(null);
   const [generating, setGenerating] = useState(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmProceed, setConfirmProceed] = useState(false);
 
   useEffect(() => {
     setCenterContent(
@@ -266,8 +269,31 @@ export default function CreateCampaign() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (existingCampaignId) {
+      setBackOverride(() => () => setConfirmCancel(true));
+    } else {
+      setBackOverride('/');
+    }
+    return () => setBackOverride(null);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form)); } catch {}
   }, [form]);
+
+  const handleCancelCampaign = async () => {
+    setCancelling(true);
+    try {
+      await api.deleteCampaign(existingCampaignId);
+      try { sessionStorage.removeItem(CAMPAIGN_ID_KEY); } catch {}
+      try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+      navigate('/');
+    } catch (err) {
+      console.error('Cancel failed:', err);
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  };
 
   const setSchedule = (key, value) =>
     setForm((f) => ({ ...f, schedule: { ...f.schedule, [key]: value } }));
@@ -313,6 +339,7 @@ export default function CreateCampaign() {
   };
 
   return (
+    <>
     <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
       <h1 style={{ textAlign: 'center', padding: '84px 24px 28px', margin: 0 }}>New Campaign</h1>
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '0 24px 24px' }}>
@@ -535,7 +562,7 @@ export default function CreateCampaign() {
           <button
             type="button"
             className="btn btn-primary btn-full"
-            onClick={() => navigate(`/campaigns/${existingCampaignId}/character`)}
+            onClick={() => setConfirmProceed(true)}
           >
             Continue to Character Create →
           </button>
@@ -547,5 +574,51 @@ export default function CreateCampaign() {
       </form>
     </div>
     </div>
+
+    {/* Lock-rules confirmation */}
+    {confirmProceed && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div className="card" style={{ maxWidth: 400, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: 0, color: 'var(--gold)' }}>Ability Score Rules Will Be Locked</h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
+            Once you proceed to character creation, the ability score rules for this campaign cannot be changed.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setConfirmProceed(false)}>
+              Stay Here
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => navigate(`/campaigns/${existingCampaignId}/character`)}>
+              Proceed to Character Create →
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Cancel campaign confirmation */}
+    {confirmCancel && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div className="card" style={{ maxWidth: 400, width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: 0, color: 'var(--danger)' }}>Cancel Campaign?</h3>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
+            This will permanently delete the campaign and remove all players. This cannot be undone.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setConfirmCancel(false)} disabled={cancelling}>
+              Keep Campaign
+            </button>
+            <button
+              className="btn btn-sm"
+              style={{ color: 'var(--danger)', borderColor: 'var(--danger)', background: 'transparent' }}
+              onClick={handleCancelCampaign}
+              disabled={cancelling}
+            >
+              {cancelling ? 'Cancelling...' : 'Yes, Cancel Campaign'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

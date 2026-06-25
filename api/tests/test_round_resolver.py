@@ -81,9 +81,10 @@ PATCH_TARGETS = [
     "get_campaign", "update_campaign",
     "get_campaign_players", "get_characters",
     "get_active_npcs", "get_character",
+    "get_npc", "upsert_character", "upsert_npc",
     "get_narrative_log", "append_narrative_round",
     "generate_rag_queries", "execute_rag_queries",
-    "generate_narrative", "extract_state", "apply_state_update",
+    "generate_narrative", "extract_state", "apply_round_state",
     "generate_and_save_action_list", "generate_scene_image",
     "broadcast_narrative",
     "send_round_notifications", "send_round_push_notifications",
@@ -116,6 +117,10 @@ def mocks():
     m["execute_rag_queries"].return_value = []
     m["generate_narrative"].return_value = NARRATIVE
     m["extract_state"].return_value = copy.deepcopy(STATE_UPDATE)
+    m["apply_round_state"].return_value = (
+        {**copy.deepcopy(WAITING_STATE), "round_status": "resolving", "pending_actions": {}},
+        [], [],
+    )
     m["generate_scene_image"].return_value = "https://example.com/scene.png"
     m["calculate_deadline"].return_value = None
     m["should_mark_inactive"].return_value = False
@@ -190,8 +195,8 @@ class TestResolveRound:
 
         resolve_round(CAMPAIGN_ID)
 
-        apply_arg = mocks["apply_state_update"].call_args[0][0]
-        assert apply_arg["round_number"] == 3  # reused, not bumped to 4
+        _, _, _, _, round_number_arg = mocks["apply_round_state"].call_args[0]
+        assert round_number_arg == 3  # reused, not bumped to 4
 
     def test_idempotency_skips_locking_upsert(self, mocks):
         mocks["get_story_state"].side_effect = [
@@ -201,11 +206,9 @@ class TestResolveRound:
 
         resolve_round(CAMPAIGN_ID)
 
-        upserted_statuses = [
-            c[0][0].get("round_status")
-            for c in mocks["upsert_story_state"].call_args_list
-        ]
-        assert "resolving" not in upserted_statuses
+        # Normal path: lock + apply + finalize + scene_image = 4 calls
+        # Idempotency path: apply + finalize + scene_image = 3 calls (no locking upsert)
+        assert len(mocks["upsert_story_state"].call_args_list) == 3
 
     def test_all_blocking_steps_are_called(self, mocks):
         resolve_round(CAMPAIGN_ID)
@@ -214,7 +217,7 @@ class TestResolveRound:
         mocks["execute_rag_queries"].assert_called_once()
         mocks["generate_narrative"].assert_called_once()
         mocks["extract_state"].assert_called_once()
-        mocks["apply_state_update"].assert_called_once()
+        mocks["apply_round_state"].assert_called_once()
 
     def test_pending_actions_cleared_in_finalization(self, mocks):
         resolve_round(CAMPAIGN_ID)

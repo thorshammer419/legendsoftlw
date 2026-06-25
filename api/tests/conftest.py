@@ -47,6 +47,8 @@ def story_state(campaign_id):
 def cosmos_mocks():
     """Patch all Cosmos DB functions used by domain.py. Returns the mock namespace."""
     targets = [
+        "get_campaign",
+        "update_campaign",
         "get_campaign_player",
         "get_campaign_players",
         "get_story_state",

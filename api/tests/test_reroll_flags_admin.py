@@ -37,7 +37,7 @@ def list_mocks():
         patch(f"{MODULE}.get_player") as mock_player,
         patch(f"{MODULE}.get_reroll_flags_for_campaign") as mock_flags,
         patch(f"{MODULE}.get_character") as mock_char,
-        patch(f"{MODULE}._is_system_admin") as mock_admin,
+        patch("functions.membership.is_system_admin") as mock_admin,
     ):
         mock_campaign.return_value = _campaign()
         mock_player.return_value = {"email": ADMIN_EMAIL, "approved": True, "display_name": "Admin"}
@@ -62,7 +62,7 @@ def remove_mocks():
         patch(f"{MODULE}.delete_reroll_flag") as mock_delete_flag,
         patch(f"{MODULE}.get_campaign_player") as mock_cp,
         patch(f"{MODULE}.upsert_campaign_player") as mock_upsert_cp,
-        patch(f"{MODULE}._is_system_admin") as mock_admin,
+        patch("functions.membership.is_system_admin") as mock_admin,
     ):
         mock_campaign.return_value = _campaign()
         mock_player.return_value = {"email": ADMIN_EMAIL, "approved": True}
@@ -189,7 +189,7 @@ async def test_remove_flag_returns_404_when_flag_not_found(remove_mocks):
 async def test_remove_flag_returns_403_for_non_admin(remove_mocks):
     from functions.webhook_http import admin_remove_reroll_flag_handler
 
-    with patch(f"{MODULE}._is_system_admin", side_effect=lambda e: False):
+    with patch("functions.membership.is_system_admin", side_effect=lambda e: False):
         remove_mocks["get_reroll_flag"].return_value = {"campaign_id": CAMPAIGN_ID, "email": PLAYER_EMAIL}
         req = _make_request(
             email="creator@example.com",

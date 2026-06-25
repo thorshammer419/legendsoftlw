@@ -57,7 +57,7 @@ class TestLobbyPresenceJoin:
     def _patches(self):
         with patch(f"{MODULE}.get_player", return_value=APPROVED_PLAYER), \
              patch(f"{MODULE}.get_campaign_player", return_value=ACTIVE_CP), \
-             patch(f"{MODULE}.get_campaign_players", return_value=[ACTIVE_CP]), \
+             patch("functions.membership.get_campaign_players", return_value=[ACTIVE_CP]), \
              patch(f"{MODULE}.lobby_presence_join", return_value=JOIN_MSG) as mock_join, \
              patch(f"{MODULE}.append_lobby_message") as mock_append, \
              patch(f"{MODULE}.broadcast_lobby_event") as mock_broadcast:
@@ -173,7 +173,7 @@ class TestProcessLobbyLeaveQueue:
     @pytest.fixture(autouse=True)
     def _patches(self):
         with patch(f"{MODULE}.get_lobby_presence_doc") as mock_presence, \
-             patch(f"{MODULE}.get_campaign_players", return_value=[ACTIVE_CP]), \
+             patch("functions.membership.get_campaign_players", return_value=[ACTIVE_CP]), \
              patch(f"{MODULE}.append_lobby_message") as mock_append, \
              patch(f"{MODULE}.broadcast_lobby_event") as mock_broadcast:
             self.mock_presence = mock_presence

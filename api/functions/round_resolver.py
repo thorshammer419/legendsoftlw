@@ -12,8 +12,10 @@ from helpers.schedule import calculate_deadline
 from functions.activities.cosmos import (
     get_campaign, update_campaign, get_story_state, upsert_story_state,
     get_characters, get_active_npcs, get_campaign_players, upsert_campaign_player,
-    apply_state_update, get_narrative_log, get_character, append_narrative_round,
+    get_npc, upsert_character, upsert_npc,
+    get_narrative_log, get_character, append_narrative_round,
 )
+from functions.domain import apply_round_state
 from functions.activities.rag_query import generate_rag_queries
 from functions.activities.search import execute_rag_queries
 from functions.activities.narrative import generate_narrative
@@ -209,13 +211,21 @@ def resolve_round(campaign_id: str):
         "current_state": story_state,
     })
 
-    apply_state_update({
-        "campaign_id": campaign_id,
-        "round_number": round_number,
-        "narrative": narrative,
-        "state_update": state_update,
-        "characters": characters,
-    })
+    npc_ids_to_update = [nu["npc_id"] for nu in (state_update.get("npc_updates") or [])]
+    existing_npcs = [
+        npc for npc_id in npc_ids_to_update
+        if (npc := get_npc({"campaign_id": campaign_id, "npc_id": npc_id})) is not None
+    ]
+
+    updated_story_state, updated_characters, updated_npcs = apply_round_state(
+        story_state, state_update, characters, existing_npcs, round_number,
+    )
+    upsert_story_state(updated_story_state)
+    for char in updated_characters:
+        upsert_character(char)
+    for npc in updated_npcs:
+        upsert_npc(npc)
+    append_narrative_round(campaign_id, round_number, narrative)
 
     new_story_state = get_story_state(campaign_id)
     new_characters = get_characters(campaign_id)

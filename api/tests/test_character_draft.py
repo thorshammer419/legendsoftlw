@@ -160,23 +160,21 @@ async def test_cancel_campaign_deletes_all_character_drafts():
 
     with (
         patch(f"{MODULE}.get_campaign") as mock_campaign,
-        patch(f"{MODULE}.get_campaign_players") as mock_players,
-        patch(f"{MODULE}.update_campaign"),
+        patch(f"{MODULE}.cancel_campaign") as mock_cancel,
         patch(f"{MODULE}.broadcast_lobby_event"),
         patch(f"{MODULE}.get_player") as mock_player,
-        patch(f"{MODULE}.delete_reroll_flags_for_campaign"),
-        patch(f"{MODULE}.delete_character_drafts_for_campaign") as mock_delete_drafts,
     ):
         mock_campaign.return_value = {
-            "id": CAMPAIGN_ID, "status": "lobby", "creator_emails": [PLAYER_EMAIL],
+            "id": CAMPAIGN_ID, "campaign_id": CAMPAIGN_ID, "status": "lobby",
+            "creator_emails": [PLAYER_EMAIL],
         }
-        mock_players.return_value = []
+        mock_cancel.return_value = {"player_emails": []}
         mock_player.return_value = {"email": PLAYER_EMAIL, "approved": True}
 
         req = _make_request(email=PLAYER_EMAIL)
         await delete_campaign_handler(req)
 
-        mock_delete_drafts.assert_called_once_with(CAMPAIGN_ID)
+        mock_cancel.assert_called_once_with(CAMPAIGN_ID)
 
 
 # ---------------------------------------------------------------------------

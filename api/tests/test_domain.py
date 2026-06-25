@@ -12,6 +12,11 @@ from functions.domain import (
     create_new_campaign,
     save_character,
     join_campaign_as_observer,
+    join_campaign,
+    launch_campaign,
+    cancel_campaign,
+    toggle_player_status,
+    apply_round_state,
     leave_campaign,
     get_lobby_chat,
     append_lobby_message,
@@ -851,3 +856,499 @@ class TestLobbyPresenceLeave:
         saved = cosmos_mocks["upsert_lobby_presence_doc"].call_args[0][0]
         assert saved["status"] == "left"
         assert saved["display_name"] == "Aria"
+
+
+# ---------------------------------------------------------------------------
+# join_campaign
+# ---------------------------------------------------------------------------
+
+class TestJoinCampaign:
+    def _campaign(self, **kwargs):
+        return {
+            "campaign_id": "camp1",
+            "status": "lobby",
+            "invite_token": "valid_token_abc",
+            "password_hash": None,
+            **kwargs,
+        }
+
+    def test_open_campaign_joins_without_credentials(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        result = join_campaign("camp1", "player@example.com")
+
+        cosmos_mocks["upsert_campaign_player"].assert_called_once()
+        assert result["campaign_was_active"] is False
+
+    def test_active_campaign_returns_campaign_was_active_true(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign(status="active")
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        result = join_campaign("camp1", "player@example.com")
+
+        assert result["campaign_was_active"] is True
+
+    def test_wrong_invite_token_raises_403(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+
+        with pytest.raises(DomainError) as exc_info:
+            join_campaign("camp1", "player@example.com", invite_token="wrong")
+
+        assert exc_info.value.http_status == 403
+        assert "invalid" in str(exc_info.value).lower()
+
+    def test_valid_invite_token_bypasses_password(self, cosmos_mocks):
+        import bcrypt
+        pw_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode()
+        cosmos_mocks["get_campaign"].return_value = self._campaign(password_hash=pw_hash)
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        result = join_campaign("camp1", "player@example.com", invite_token="valid_token_abc")
+
+        cosmos_mocks["upsert_campaign_player"].assert_called_once()
+        assert result["campaign_was_active"] is False
+
+    def test_missing_password_raises_403(self, cosmos_mocks):
+        import bcrypt
+        pw_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode()
+        cosmos_mocks["get_campaign"].return_value = self._campaign(password_hash=pw_hash)
+
+        with pytest.raises(DomainError) as exc_info:
+            join_campaign("camp1", "player@example.com")
+
+        assert exc_info.value.http_status == 403
+        assert "password" in str(exc_info.value).lower()
+
+    def test_wrong_password_raises_403(self, cosmos_mocks):
+        import bcrypt
+        pw_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode()
+        cosmos_mocks["get_campaign"].return_value = self._campaign(password_hash=pw_hash)
+
+        with pytest.raises(DomainError) as exc_info:
+            join_campaign("camp1", "player@example.com", password="wrongpass")
+
+        assert exc_info.value.http_status == 403
+        assert "incorrect" in str(exc_info.value).lower()
+
+    def test_correct_password_joins(self, cosmos_mocks):
+        import bcrypt
+        pw_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode()
+        cosmos_mocks["get_campaign"].return_value = self._campaign(password_hash=pw_hash)
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        result = join_campaign("camp1", "player@example.com", password="secret")
+
+        cosmos_mocks["upsert_campaign_player"].assert_called_once()
+        assert result["campaign_was_active"] is False
+
+
+# ---------------------------------------------------------------------------
+# launch_campaign
+# ---------------------------------------------------------------------------
+
+class TestLaunchCampaign:
+    def _campaign(self):
+        return {
+            "campaign_id": "camp1",
+            "id": "campaign_camp1",
+            "status": "lobby",
+        }
+
+    def test_sets_campaign_status_to_active(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = []
+
+        launch_campaign("camp1")
+
+        cosmos_mocks["update_campaign"].assert_called_once()
+        saved = cosmos_mocks["update_campaign"].call_args[0][0]
+        assert saved["status"] == "active"
+
+    def test_returns_all_player_emails(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = [
+            {"email": "a@example.com"},
+            {"email": "b@example.com"},
+        ]
+
+        result = launch_campaign("camp1")
+
+        assert set(result["player_emails"]) == {"a@example.com", "b@example.com"}
+
+    def test_returns_empty_list_when_no_players(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = []
+
+        result = launch_campaign("camp1")
+
+        assert result["player_emails"] == []
+
+
+# ---------------------------------------------------------------------------
+# cancel_campaign
+# ---------------------------------------------------------------------------
+
+class TestCancelCampaign:
+    def _campaign(self):
+        return {
+            "campaign_id": "camp1",
+            "id": "campaign_camp1",
+            "status": "lobby",
+        }
+
+    def test_soft_deletes_campaign(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = []
+
+        cancel_campaign("camp1")
+
+        cosmos_mocks["update_campaign"].assert_called_once()
+        saved = cosmos_mocks["update_campaign"].call_args[0][0]
+        assert saved["status"] == "deleted"
+
+    def test_returns_player_emails_before_deletion(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = [
+            {"email": "a@example.com"},
+            {"email": "b@example.com"},
+        ]
+
+        result = cancel_campaign("camp1")
+
+        assert set(result["player_emails"]) == {"a@example.com", "b@example.com"}
+
+    def test_deletes_reroll_flags(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = []
+
+        cancel_campaign("camp1")
+
+        cosmos_mocks["delete_reroll_flags_for_campaign"].assert_called_once_with("camp1")
+
+    def test_deletes_character_drafts(self, cosmos_mocks):
+        cosmos_mocks["get_campaign"].return_value = self._campaign()
+        cosmos_mocks["get_campaign_players"].return_value = []
+
+        cancel_campaign("camp1")
+
+        cosmos_mocks["delete_character_drafts_for_campaign"].assert_called_once_with("camp1")
+
+
+# ---------------------------------------------------------------------------
+# toggle_player_status
+# ---------------------------------------------------------------------------
+
+class TestTogglePlayerStatus:
+    def _cp(self, **kwargs):
+        return {
+            "campaign_id": "camp1",
+            "email": "player@example.com",
+            "status": "active",
+            "consecutive_combat_skips": 2,
+            "consecutive_scene_skips": 3,
+            "manually_set_inactive": False,
+            "inactivated_at": None,
+            **kwargs,
+        }
+
+    def test_sets_status_to_inactive(self, cosmos_mocks):
+        cosmos_mocks["get_campaign_player"].return_value = self._cp()
+
+        result = toggle_player_status("camp1", "player@example.com", "inactive")
+
+        assert result["status"] == "inactive"
+        saved = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved["status"] == "inactive"
+        assert saved["manually_set_inactive"] is True
+        assert saved["inactivated_at"] is not None
+
+    def test_sets_status_to_active_and_resets_skip_counts(self, cosmos_mocks):
+        cosmos_mocks["get_campaign_player"].return_value = self._cp(
+            status="inactive", manually_set_inactive=True,
+            consecutive_combat_skips=5, consecutive_scene_skips=7,
+        )
+
+        result = toggle_player_status("camp1", "player@example.com", "active")
+
+        assert result["status"] == "active"
+        saved = cosmos_mocks["upsert_campaign_player"].call_args[0][0]
+        assert saved["status"] == "active"
+        assert saved["manually_set_inactive"] is False
+        assert saved["consecutive_combat_skips"] == 0
+        assert saved["consecutive_scene_skips"] == 0
+        assert saved["inactivated_at"] is None
+
+    def test_raises_404_when_player_not_in_campaign(self, cosmos_mocks):
+        cosmos_mocks["get_campaign_player"].return_value = None
+
+        with pytest.raises(DomainError) as exc_info:
+            toggle_player_status("camp1", "ghost@example.com", "inactive")
+
+        assert exc_info.value.http_status == 404
+
+    def test_raises_400_for_invalid_status(self, cosmos_mocks):
+        cosmos_mocks["get_campaign_player"].return_value = self._cp()
+
+        with pytest.raises(DomainError) as exc_info:
+            toggle_player_status("camp1", "player@example.com", "banned")
+
+        assert exc_info.value.http_status == 400
+
+
+# ---------------------------------------------------------------------------
+# apply_round_state
+# ---------------------------------------------------------------------------
+
+class TestApplyRoundState:
+    def _story_state(self, **kwargs):
+        return {
+            "campaign_id": "camp1",
+            "round_number": 1,
+            "scene_type": "exploration",
+            "current_scene": {"location": "Tavern"},
+            "quest": {"completed_milestones": [], "failed_milestones": []},
+            "narrative_summary": "",
+            "pending_actions": {"a@example.com": {"action_text": "attack"}},
+            "action_economy": {},
+            **kwargs,
+        }
+
+    def _char(self, email="p@example.com", hp_current=20, hp_max=20, **kwargs):
+        return {
+            "email": email,
+            "hp": {"current": hp_current, "max": hp_max},
+            "conditions": [],
+            "spell_slots": {},
+            "class_features": [],
+            "speed": 30,
+            **kwargs,
+        }
+
+    # --- Story state ---
+
+    def test_increments_round_number(self):
+        ss, _, _ = apply_round_state(self._story_state(), {}, [], [], 5)
+        assert ss["round_number"] == 5
+
+    def test_clears_pending_actions(self):
+        ss, _, _ = apply_round_state(self._story_state(), {}, [], [], 2)
+        assert ss["pending_actions"] == {}
+
+    def test_applies_scene_type(self):
+        ss, _, _ = apply_round_state(self._story_state(), {"scene_type": "combat"}, [], [], 2)
+        assert ss["scene_type"] == "combat"
+
+    def test_merges_current_scene(self):
+        ss, _, _ = apply_round_state(
+            self._story_state(),
+            {"current_scene": {"location": "Forest"}},
+            [], [], 2,
+        )
+        assert ss["current_scene"]["location"] == "Forest"
+
+    def test_merges_quest_milestones_without_duplicates(self):
+        state = self._story_state()
+        state["quest"] = {
+            "completed_milestones": ["A"],
+            "failed_milestones": [],
+        }
+        ss, _, _ = apply_round_state(
+            state,
+            {"quest": {"completed_milestones": ["A", "B"], "failed_milestones": ["C"]}},
+            [], [], 2,
+        )
+        assert sorted(ss["quest"]["completed_milestones"]) == ["A", "B"]
+        assert ss["quest"]["failed_milestones"] == ["C"]
+
+    def test_appends_narrative_summary(self):
+        state = self._story_state(narrative_summary="Round 1.")
+        ss, _, _ = apply_round_state(
+            state,
+            {"narrative_summary_append": "Round 2."},
+            [], [], 2,
+        )
+        assert "Round 1." in ss["narrative_summary"]
+        assert "Round 2." in ss["narrative_summary"]
+
+    def test_resets_action_economy(self):
+        state = self._story_state(action_economy={
+            "p@example.com": {"action_used": True, "bonus_action_used": True,
+                               "reaction_used": True, "movement_remaining": 0},
+        })
+        chars = [self._char(email="p@example.com", speed=35)]
+        ss, _, _ = apply_round_state(state, {}, chars, [], 2)
+        economy = ss["action_economy"]["p@example.com"]
+        assert economy["action_used"] is False
+        assert economy["bonus_action_used"] is False
+        assert economy["reaction_used"] is False
+        assert economy["movement_remaining"] == 35
+
+    def test_does_not_mutate_input_story_state(self):
+        state = self._story_state()
+        original_round = state["round_number"]
+        apply_round_state(state, {"scene_type": "combat"}, [], [], 9)
+        assert state["round_number"] == original_round
+        assert state["scene_type"] == "exploration"
+
+    # --- Characters ---
+
+    def test_applies_hp_change(self):
+        chars = [self._char(hp_current=20)]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "hp_change": -5}]},
+            chars, [], 2,
+        )
+        assert updated_chars[0]["hp"]["current"] == 15
+
+    def test_hp_cannot_go_below_zero(self):
+        chars = [self._char(hp_current=3)]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "hp_change": -10}]},
+            chars, [], 2,
+        )
+        assert updated_chars[0]["hp"]["current"] == 0
+
+    def test_adds_and_removes_conditions(self):
+        chars = [self._char(conditions=["poisoned"])]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{
+                "email": "p@example.com",
+                "conditions_added": ["stunned"],
+                "conditions_removed": ["poisoned"],
+            }]},
+            chars, [], 2,
+        )
+        conds = set(updated_chars[0]["conditions"])
+        assert "stunned" in conds
+        assert "poisoned" not in conds
+
+    def test_consumes_spell_slots(self):
+        chars = [self._char(spell_slots={"1": {"remaining": 3, "total": 4}})]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "spell_slots_used": {"1": 2}}]},
+            chars, [], 2,
+        )
+        assert updated_chars[0]["spell_slots"]["1"]["remaining"] == 1
+
+    def test_spell_slots_cannot_go_below_zero(self):
+        chars = [self._char(spell_slots={"1": {"remaining": 1, "total": 4}})]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "spell_slots_used": {"1": 5}}]},
+            chars, [], 2,
+        )
+        assert updated_chars[0]["spell_slots"]["1"]["remaining"] == 0
+
+    def test_consumes_class_feature_uses(self):
+        chars = [self._char(class_features=[{"name": "Rage", "uses": {"remaining": 3, "total": 3}}])]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "class_feature_uses": {"Rage": 1}}]},
+            chars, [], 2,
+        )
+        feat = next(f for f in updated_chars[0]["class_features"] if f["name"] == "Rage")
+        assert feat["uses"]["remaining"] == 2
+
+    def test_skips_update_for_unknown_player(self):
+        chars = [self._char(email="p@example.com")]
+        _, updated_chars, _ = apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "ghost@example.com", "hp_change": -5}]},
+            chars, [], 2,
+        )
+        assert updated_chars == []
+
+    def test_does_not_mutate_input_characters(self):
+        chars = [self._char(hp_current=20)]
+        apply_round_state(
+            self._story_state(),
+            {"player_updates": [{"email": "p@example.com", "hp_change": -5}]},
+            chars, [], 2,
+        )
+        assert chars[0]["hp"]["current"] == 20
+
+    # --- NPCs ---
+
+    def test_applies_npc_hp_change(self):
+        npc = {"id": "npc_camp1_goblin", "hp": {"current": 10, "max": 10}, "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_goblin", "hp_change": -4}]},
+            [], [npc], 2,
+        )
+        assert updated_npcs[0]["hp"]["current"] == 6
+
+    def test_npc_hp_cannot_go_below_zero(self):
+        npc = {"id": "npc_camp1_goblin", "hp": {"current": 2, "max": 10}, "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_goblin", "hp_change": -10}]},
+            [], [npc], 2,
+        )
+        assert updated_npcs[0]["hp"]["current"] == 0
+
+    def test_applies_npc_status_change(self):
+        npc = {"id": "npc_camp1_goblin", "status": "alive", "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_goblin", "status_change": "dead"}]},
+            [], [npc], 2,
+        )
+        assert updated_npcs[0]["status"] == "dead"
+
+    def test_updates_npc_relationships(self):
+        npc = {"id": "npc_camp1_innkeeper", "relationships": {}, "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_innkeeper", "relationship_changes": [
+                {"email": "p@example.com", "new_disposition": "friendly", "summary_update": "Helped them"},
+            ]}]},
+            [], [npc], 5,
+        )
+        rel = updated_npcs[0]["relationships"]["p@example.com"]
+        assert rel["disposition"] == "friendly"
+        assert rel["last_interaction_round"] == 5
+
+    def test_skips_npc_update_when_npc_not_in_existing_list(self):
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_missing", "status_change": "dead"}]},
+            [], [], 2,
+        )
+        assert updated_npcs == []
+
+    def test_stamps_last_seen_round_on_updated_npc(self):
+        npc = {"id": "npc_camp1_goblin", "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"npc_updates": [{"npc_id": "npc_camp1_goblin", "status_change": "fleeing"}]},
+            [], [npc], 7,
+        )
+        assert updated_npcs[0]["last_seen_round"] == 7
+
+    def test_stamps_new_npcs_with_campaign_and_round(self):
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {"new_npcs": [{"id": "npc_camp1_wizard", "name": "Merlin"}]},
+            [], [], 3,
+        )
+        assert updated_npcs[0]["campaign_id"] == "camp1"
+        assert updated_npcs[0]["first_appeared_round"] == 3
+        assert updated_npcs[0]["last_seen_round"] == 3
+
+    def test_returns_updated_and_new_npcs_together(self):
+        npc = {"id": "npc_camp1_goblin", "campaign_id": "camp1"}
+        _, _, updated_npcs = apply_round_state(
+            self._story_state(),
+            {
+                "npc_updates": [{"npc_id": "npc_camp1_goblin", "status_change": "dead"}],
+                "new_npcs": [{"id": "npc_camp1_wizard", "name": "Merlin"}],
+            },
+            [], [npc], 3,
+        )
+        assert len(updated_npcs) == 2

@@ -50,7 +50,7 @@ class TestLobbyMessagePost:
     def _patches(self):
         with patch(f"{MODULE}.get_player", return_value=APPROVED_PLAYER) as mock_get_player, \
              patch(f"{MODULE}.get_campaign_player", return_value=ACTIVE_CP), \
-             patch(f"{MODULE}.get_campaign_players", return_value=[ACTIVE_CP]), \
+             patch("functions.membership.get_campaign_players", return_value=[ACTIVE_CP]), \
              patch(f"{MODULE}.broadcast_lobby_event") as mock_broadcast, \
              patch(f"{MODULE}.append_lobby_message") as mock_append:
             self.mock_broadcast = mock_broadcast

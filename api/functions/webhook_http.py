@@ -20,9 +20,7 @@ from functions.activities.cosmos import (
     get_allowed_user, upsert_allowed_user, delete_allowed_user, list_allowed_users,
     list_all_campaigns, get_campaign_by_invite_token,
     get_lobby_presence_doc,
-    delete_reroll_flags_for_campaign,
     get_reroll_flags_for_campaign, get_reroll_flag, delete_reroll_flag,
-    delete_character_drafts_for_campaign,
 )
 from functions.activities.action_validator import validate_freeform_action
 from functions.activities.signalr import get_signalr_connection_info, broadcast_lobby_event
@@ -32,9 +30,15 @@ from functions.activities.email import (
 )
 from functions.domain import (
     DomainError, submit_player_action, create_new_campaign, save_character,
-    join_campaign_as_observer, leave_campaign, append_lobby_message, get_lobby_chat,
+    join_campaign_as_observer, join_campaign, launch_campaign, cancel_campaign,
+    toggle_player_status,
+    leave_campaign, append_lobby_message, get_lobby_chat,
     lobby_presence_join, lobby_presence_leave,
     save_character_draft, get_character_draft_for_player,
+)
+from functions.membership import (
+    is_system_admin, is_admin, is_member, get_member_emails,
+    assert_can_join, assert_is_admin, assert_is_system_admin,
 )
 from helpers.queue import enqueue
 from helpers.llm import openai_client
@@ -200,8 +204,7 @@ async def get_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except Exception:
         return _error("Campaign not found", 404)
 
-    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
-    if not cp and not _is_system_admin(email):
+    if not is_member(campaign_id, email) and not is_system_admin(email):
         return _error("Not a member of this campaign", 403)
 
     return _json_response(campaign)
@@ -249,17 +252,13 @@ async def join_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     if campaign.get("status") in ("deleted", "completed"):
         return _error("Campaign not found", 404)
 
-    if campaign.get("status") not in ("lobby", "active"):
-        return _error("Campaign is not open for new players", 400)
-
-    cp = get_campaign_player({"campaign_id": campaign_id, "email": email})
-    if cp:
+    if is_member(campaign_id, email):
         return _json_response({"status": "already_member", "campaign_id": campaign_id})
 
-    players = get_campaign_players(campaign_id)
-    active_count = sum(1 for p in players if p.get("status") == "active")
-    if active_count >= campaign.get("max_players", 8):
-        return _error("This campaign is full", 409)
+    try:
+        assert_can_join(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     body = {}
     try:
@@ -267,19 +266,16 @@ async def join_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError:
         pass
 
-    provided_token = body.get("invite_token", "").strip()
-    if provided_token:
-        if provided_token != campaign.get("invite_token"):
-            return _error("Invalid invite link", 403)
-    elif campaign.get("password_hash"):
-        provided = body.get("password", "").strip()
-        if not provided:
-            return _error("Password required", 403)
-        if not bcrypt.checkpw(provided.encode(), campaign["password_hash"].encode()):
-            return _error("Incorrect password", 403)
+    try:
+        result = join_campaign(
+            campaign_id, email,
+            invite_token=body.get("invite_token", "").strip(),
+            password=body.get("password", "").strip(),
+        )
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
-    join_campaign_as_observer(campaign_id, email)
-    if campaign.get("status") == "active":
+    if result["campaign_was_active"]:
         enqueue("player-join", {"campaign_id": campaign_id, "email": email})
 
     return _json_response({"status": "joined", "campaign_id": campaign_id}, 201)
@@ -380,7 +376,6 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
     result = save_character(campaign_id, email, body)
 
     if result["first_completion"]:
-        all_players = get_campaign_players(campaign_id)
         try:
             broadcast_lobby_event({
                 "campaign_id": campaign_id,
@@ -389,7 +384,7 @@ async def upsert_character_handler(req: func.HttpRequest) -> func.HttpResponse:
                 "display_name": result["display_name"],
                 "char_name": result["char_name"],
                 "char_class": result["char_class"],
-                "player_emails": [p["email"] for p in all_players],
+                "player_emails": get_member_emails(campaign_id),
             })
         except Exception:
             pass
@@ -409,8 +404,10 @@ async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     try:
         body = req.get_json()
@@ -423,38 +420,25 @@ async def admin_toggle_player(req: func.HttpRequest) -> func.HttpResponse:
     if not target_email or new_status not in ("active", "inactive"):
         return _error("email and status (active|inactive) required")
 
-    cp = get_campaign_player({"campaign_id": campaign_id, "email": target_email})
-    if not cp:
-        return _error("Player not found in campaign", 404)
+    try:
+        result = toggle_player_status(campaign_id, target_email, new_status)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
-    cp["status"] = new_status
-    cp["manually_set_inactive"] = new_status == "inactive"
-    if new_status == "inactive":
-        cp["inactivated_at"] = datetime.now(timezone.utc).isoformat()
-        try:
-            send_player_inactive_notification({
-                "email": target_email,
-                "campaign_name": campaign.get("name", ""),
-                "campaign_id": campaign_id,
-            })
-        except Exception:
-            pass
-    else:
-        cp["consecutive_combat_skips"] = 0
-        cp["consecutive_scene_skips"] = 0
-        cp["inactivated_at"] = None
-        cp["manually_set_inactive"] = False
-        try:
-            send_player_reactivated_notification({
-                "email": target_email,
-                "campaign_name": campaign.get("name", ""),
-                "campaign_id": campaign_id,
-            })
-        except Exception:
-            pass
+    notify_fn = (
+        send_player_inactive_notification if new_status == "inactive"
+        else send_player_reactivated_notification
+    )
+    try:
+        notify_fn({
+            "email": target_email,
+            "campaign_name": campaign.get("name", ""),
+            "campaign_id": campaign_id,
+        })
+    except Exception:
+        pass
 
-    upsert_campaign_player(cp)
-    return _json_response({"status": new_status})
+    return _json_response(result)
 
 
 async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
@@ -465,8 +449,10 @@ async def admin_start_round(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     story_state = get_story_state(campaign_id)
     if story_state.get("round_status") == "resolving":
@@ -484,8 +470,10 @@ async def admin_export_novel(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     enqueue("novel-export", {"campaign_id": campaign_id})
     return _json_response({"status": "export_queued"})
@@ -502,8 +490,10 @@ async def admin_update_settings_handler(req: func.HttpRequest) -> func.HttpRespo
     except Exception:
         return _error("Campaign not found", 404)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     try:
         body = req.get_json() or {}
@@ -531,8 +521,10 @@ async def admin_regenerate_invite_handler(req: func.HttpRequest) -> func.HttpRes
     except Exception:
         return _error("Campaign not found", 404)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     campaign["invite_token"] = secrets.token_urlsafe(32)
     update_campaign(campaign)
@@ -548,8 +540,10 @@ async def admin_list_reroll_flags_handler(req: func.HttpRequest) -> func.HttpRes
     if err:
         return err
 
-    if not _is_system_admin(email):
-        return _error("System admin access required", 403)
+    try:
+        assert_is_system_admin(email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     campaign_id = req.route_params.get("campaign_id")
     flags = get_reroll_flags_for_campaign(campaign_id)
@@ -572,8 +566,10 @@ async def admin_remove_reroll_flag_handler(req: func.HttpRequest) -> func.HttpRe
     if err:
         return err
 
-    if not _is_system_admin(email):
-        return _error("System admin access required", 403)
+    try:
+        assert_is_system_admin(email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
     campaign_id = req.route_params.get("campaign_id")
     player_email = req.route_params.get("player_email")
@@ -655,7 +651,6 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
     display_name = player.get("display_name", email.split("@")[0]) if player else email.split("@")[0]
     char_class = cp.get("char_class") or None
     rerolled = cp.get("rerolled", False)
-    all_players = get_campaign_players(campaign_id)
     message_id = (body.get("message_id") or "").strip() or str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -675,7 +670,7 @@ async def lobby_message_handler(req: func.HttpRequest) -> func.HttpResponse:
     broadcast_lobby_event({
         **message,
         "campaign_id": campaign_id,
-        "player_emails": [p["email"] for p in all_players],
+        "player_emails": get_member_emails(campaign_id),
     })
     return _json_response({"status": "sent"})
 
@@ -702,19 +697,19 @@ async def lobby_launch_handler(req: func.HttpRequest) -> func.HttpResponse:
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
-    campaign["status"] = "active"
-    update_campaign(campaign)
+    result = launch_campaign(campaign_id)
 
     enqueue("campaign-intro", {"campaign_id": campaign_id})
 
-    all_players = get_campaign_players(campaign_id)
     broadcast_lobby_event({
         "campaign_id": campaign_id,
         "type": "launched",
-        "player_emails": [p["email"] for p in all_players],
+        "player_emails": result["player_emails"],
     })
     return _json_response({"status": "launched"})
 
@@ -740,11 +735,10 @@ async def lobby_presence_handler(req: func.HttpRequest) -> func.HttpResponse:
         message = lobby_presence_join(campaign_id, email)
         if message:
             append_lobby_message(campaign_id, message)
-            all_players = get_campaign_players(campaign_id)
             broadcast_lobby_event({
                 **message,
                 "campaign_id": campaign_id,
-                "player_emails": [p["email"] for p in all_players],
+                "player_emails": get_member_emails(campaign_id),
             })
         return _json_response({"status": "joined"})
 
@@ -779,11 +773,10 @@ def process_lobby_leave_queue(data: dict) -> None:
 
     append_lobby_message(campaign_id, message)
 
-    all_players = get_campaign_players(campaign_id)
     broadcast_lobby_event({
         **message,
         "campaign_id": campaign_id,
-        "player_emails": [p["email"] for p in all_players],
+        "player_emails": get_member_emails(campaign_id),
     })
 
 
@@ -798,22 +791,18 @@ async def delete_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except Exception:
         return _error("Campaign not found", 404)
 
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Admin access required", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
 
-    all_players = get_campaign_players(campaign_id)
-    player_emails = [p["email"] for p in all_players]
+    result = cancel_campaign(campaign_id)
 
-    campaign["status"] = "deleted"
-    update_campaign(campaign)
-    delete_reroll_flags_for_campaign(campaign_id)
-    delete_character_drafts_for_campaign(campaign_id)
-
-    if player_emails:
+    if result["player_emails"]:
         broadcast_lobby_event({
             "type": "campaign_deleted",
             "campaign_id": campaign_id,
-            "player_emails": player_emails,
+            "player_emails": result["player_emails"],
         })
 
     return _json_response({"status": "deleted"})
@@ -830,8 +819,7 @@ async def leave_campaign_handler(req: func.HttpRequest) -> func.HttpResponse:
     except DomainError as e:
         return _error(str(e), e.http_status)
 
-    remaining = get_campaign_players(campaign_id)
-    remaining_emails = [p["email"] for p in remaining]
+    remaining_emails = get_member_emails(campaign_id)
     if remaining_emails:
         broadcast_lobby_event({
             "type": "player_left",
@@ -875,24 +863,19 @@ async def register_player(req: func.HttpRequest) -> func.HttpResponse:
         player["approved"] = True
         upsert_player(player)
 
-    return _json_response({**player, "is_system_admin": _is_system_admin(email)})
+    return _json_response({**player, "is_system_admin": is_system_admin(email)})
 
 
 # ---------------------------------------------------------------------------
 # Allowlist management (system admin only)
-# ---------------------------------------------------------------------------
-
-def _is_system_admin(email: str) -> bool:
-    admins = os.environ.get("SYSTEM_ADMIN_EMAILS", "")
-    return email in [e.strip() for e in admins.split(",") if e.strip()]
-
-
 async def get_allowed_users_handler(req: func.HttpRequest) -> func.HttpResponse:
     email, err = _require_auth_approved(req)
     if err:
         return err
-    if not _is_system_admin(email):
-        return _error("System admin access required", 403)
+    try:
+        assert_is_system_admin(email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
     return _json_response(list_allowed_users())
 
 
@@ -900,8 +883,10 @@ async def add_allowed_user_handler(req: func.HttpRequest) -> func.HttpResponse:
     email, err = _require_auth_approved(req)
     if err:
         return err
-    if not _is_system_admin(email):
-        return _error("System admin access required", 403)
+    try:
+        assert_is_system_admin(email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
     try:
         body = req.get_json()
     except ValueError:
@@ -917,8 +902,10 @@ async def remove_allowed_user_handler(req: func.HttpRequest) -> func.HttpRespons
     email, err = _require_auth_approved(req)
     if err:
         return err
-    if not _is_system_admin(email):
-        return _error("System admin access required", 403)
+    try:
+        assert_is_system_admin(email)
+    except DomainError as e:
+        return _error(str(e), e.http_status)
     try:
         body = req.get_json()
     except ValueError:
@@ -1066,8 +1053,10 @@ async def reroll_response_handler(req: func.HttpRequest) -> func.HttpResponse:
 
     campaign_id = req.route_params.get("campaign_id")
     campaign = get_campaign(campaign_id)
-    if not _is_system_admin(email) and email not in campaign.get("creator_emails", []):
-        return _error("Only campaign creators can respond to reroll requests", 403)
+    try:
+        assert_is_admin(campaign, email)
+    except DomainError as e:
+        return _error("Only campaign creators can respond to reroll requests", e.http_status)
 
     try:
         body = req.get_json()

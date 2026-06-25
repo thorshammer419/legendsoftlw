@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import ClassDiePicker from '../components/character/ClassDiePicker';
+import AbilityScorePanel from '../components/character/AbilityScorePanel';
 import { useSignalR } from '../hooks/useSignalR';
 import { useNavbar } from '../context/NavbarContext';
 import { useAbilityScoreEngine } from '../hooks/useAbilityScoreEngine';
 import { useRerollApproval } from '../hooks/useRerollApproval';
+import { useDraftPersistence } from '../hooks/useDraftPersistence';
 import { rollDice } from '../utils/diceRoller';
+import { ABILITY_KEYS, mod } from '../data/abilityScoreConstants';
 
 const RACES = [
   'Human', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)',
@@ -50,39 +53,34 @@ const RACE_SPEED = {
   'Rock Gnome': 25, 'Forest Gnome': 25,
 };
 
-const ABILITY_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
-const ABILITY_SHORT = { strength: 'STR', dexterity: 'DEX', constitution: 'CON', intelligence: 'INT', wisdom: 'WIS', charisma: 'CHA' };
-
-function mod(score) {
-  return Math.floor((score - 10) / 2);
-}
+const INITIAL_SCORES = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
 
 function proficiencyBonus(level) {
   return Math.floor((level - 1) / 4) + 2;
 }
-
-const INITIAL_SCORES = { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 };
 
 
 export default function CharacterCreate({ user }) {
   const { campaignId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { setCenterContent, setBackOverride } = useNavbar();
+  const { setCenterContent, setBackOverride, setPendingRerollRequest } = useNavbar();
 
-  const [step, setStep] = useState(() => searchParams.get('step') === '2' ? 2 : 1);
-  const [draftRestored, setDraftRestored] = useState(() => searchParams.get('step') !== '2');
+  const startedAtStep2 = searchParams.get('step') === '2';
+  const [step, setStep] = useState(() => startedAtStep2 ? 2 : 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [maxLevel, setMaxLevel] = useState(null); // null = loading
+  const [maxLevel, setMaxLevel] = useState(null);
   const [creatorEmails, setCreatorEmails] = useState([]);
   const [abilityScoreMethod, setAbilityScoreMethod] = useState('standard_array');
   const [abilityScoreRules, setAbilityScoreRules] = useState({ standard_array: [15, 14, 13, 12, 10, 8] });
-  const [confirmAction, setConfirmAction] = useState(null); // 'leave' | 'cancel' | null
+  const [confirmAction, setConfirmAction] = useState(null);
   const [actioning, setActioning] = useState(false);
   const [hasRerolled, setHasRerolled] = useState(false);
-  const [confirmingChipIdx, setConfirmingChipIdx] = useState(null);
   const [campaignLoaded, setCampaignLoaded] = useState(false);
+
+  // Manual fallback scores — only used when no ability_score_method is set
+  const [scores, setScores] = useState(INITIAL_SCORES);
 
   const [identity, setIdentity] = useState({
     name: '',
@@ -94,9 +92,6 @@ export default function CharacterCreate({ user }) {
     backstory: '',
   });
 
-  const [scores, setScores] = useState(INITIAL_SCORES);
-  const [selectedSlot, setSelectedSlot] = useState(null);
-
   const engine = useAbilityScoreEngine({
     ability_score_method: abilityScoreMethod,
     ability_score_rules: abilityScoreRules,
@@ -106,6 +101,7 @@ export default function CharacterCreate({ user }) {
   const isPointBuy = abilityScoreMethod === 'point_buy';
   const isRollForStats = abilityScoreMethod === 'roll_for_stats';
   const useEngine = isStandardArray || isPointBuy || isRollForStats;
+
   const activeScores = useEngine
     ? Object.fromEntries(ABILITY_KEYS.map((k) => [k, engine.scores[k] ?? (isPointBuy ? 8 : 10)]))
     : scores;
@@ -113,18 +109,7 @@ export default function CharacterCreate({ user }) {
   const rollDiceCount = abilityScoreRules.roll_dice ?? 4;
   const rollKeepCount = abilityScoreRules.roll_keep ?? 3;
 
-  const doRoll = () => {
-    const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
-    engine.recordRoll(result);
-  };
-
-  const doRollAll = async () => {
-    for (let i = 0; i < 6; i++) {
-      doRoll();
-      if (i < 5) await new Promise((r) => setTimeout(r, 150));
-    }
-  };
-
+  // Campaign data — maxLevel, creator role, ability score rules
   useEffect(() => {
     api.getCampaign(campaignId)
       .then((c) => {
@@ -134,61 +119,15 @@ export default function CharacterCreate({ user }) {
         setIdentity((i) => ({ ...i, level: max }));
         setAbilityScoreMethod(c.ability_score_method ?? 'standard_array');
         setAbilityScoreRules(c.ability_score_rules ?? { standard_array: [15, 14, 13, 12, 10, 8] });
-        campaignLoadedRef.current = true;
         setCampaignLoaded(true);
       })
-      .catch(() => { setMaxLevel(20); campaignLoadedRef.current = true; setCampaignLoaded(true); });
+      .catch(() => { setMaxLevel(20); setCampaignLoaded(true); });
   }, [campaignId]);
-
-  useEffect(() => {
-    if (!campaignLoaded) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const draft = await api.getDraft(campaignId);
-        if (cancelled) return;
-        if (!draft) {
-          const char = await api.getCharacter(campaignId).catch(() => null);
-          if (cancelled || !char) return;
-          setIdentity({
-            name: char.name || '',
-            race: char.race || RACES[0],
-            class_name: char.class || CLASSES[0].name,
-            background: char.background || BACKGROUNDS[0],
-            alignment: char.alignment || 'True Neutral',
-            level: char.level || 1,
-            backstory: char.backstory || '',
-          });
-          const rollResults = abilityScoreMethod === 'roll_for_stats'
-            ? ABILITY_KEYS.map((k) => ({
-                rolls: [char.ability_scores[k]],
-                kept: [char.ability_scores[k]],
-                dropped: [],
-                sum: char.ability_scores[k],
-              }))
-            : [];
-          engine.restoreFromDraft({ scores: char.ability_scores, availableChips: [], rollResults });
-          return;
-        }
-        if (draft.identity) setIdentity(draft.identity);
-        if (draft.step === 2) setStep(2);
-        engine.restoreFromDraft({
-          scores: draft.scores,
-          availableChips: draft.available_chips,
-          rollResults: draft.roll_results,
-        });
-      } catch {
-        // ignore errors, fall through to finally
-      } finally {
-        if (!cancelled) setDraftRestored(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [campaignLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const myEmail = user?.userDetails;
   const iAmCreator = creatorEmails.includes(myEmail);
 
+  // Draft persistence — load on mount, save on navigation, save on unload
   const draftRef = useRef(null);
   draftRef.current = {
     step,
@@ -198,42 +137,30 @@ export default function CharacterCreate({ user }) {
     roll_results: engine.rollResults,
   };
 
-  const skipDraftSaveRef = useRef(false);
-  const campaignLoadedRef = useRef(false);
-
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      fetch(`/api/campaigns/${campaignId}/character/draft`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draftRef.current),
-        keepalive: true,
-      });
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Save draft when navigating away normally (e.g. Navbar back from step 1 → New Campaign).
-  // Skipped on leave/cancel/submit — those paths manage the draft themselves.
-  // Uses api.saveDraft (not keepalive fetch) because SPA navigation keeps the page alive.
-  useEffect(() => {
-    return () => {
-      if (skipDraftSaveRef.current || !campaignLoadedRef.current) return;
-      api.saveDraft(campaignId, draftRef.current).catch(() => {});
-    };
-  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { draftRestored, saveDraft, markSkipSave } = useDraftPersistence({
+    campaignId,
+    campaignLoaded,
+    abilityScoreMethod,
+    getDraftData: () => draftRef.current,
+    onRestored: ({ identity: restoredIdentity, step: restoredStep, scores: restoredScores, availableChips, rollResults }) => {
+      if (restoredIdentity) setIdentity(restoredIdentity);
+      if (restoredStep === 2) setStep(2);
+      engine.restoreFromDraft({ scores: restoredScores, availableChips, rollResults });
+    },
+    initialDraftRestored: !startedAtStep2,
+  });
 
   const handleNext = async () => {
-    await api.saveDraft(campaignId, { ...draftRef.current, step: 2 }).catch(() => {});
+    await saveDraft({ step: 2 });
     setStep(2);
   };
 
   const handleBack = async () => {
-    await api.saveDraft(campaignId, { ...draftRef.current, step: 1 }).catch(() => {});
+    await saveDraft({ step: 1 });
     setStep(1);
   };
 
+  // Navbar — back override and center content (step indicator + Cancel/Leave)
   useEffect(() => {
     if (step !== 2) {
       setBackOverride(iAmCreator ? '/campaigns/new' : '/');
@@ -260,8 +187,6 @@ export default function CharacterCreate({ user }) {
     );
     return () => setCenterContent(null);
   }, [iAmCreator]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const { setPendingRerollRequest } = useNavbar();
 
   useSignalR(campaignId, {
     onLobbyEvent: (event) => {
@@ -295,7 +220,7 @@ export default function CharacterCreate({ user }) {
       } else {
         await api.leaveCampaign(campaignId);
       }
-      skipDraftSaveRef.current = true;
+      markSkipSave();
       navigate('/', { replace: true });
     } catch (err) {
       console.error('Action failed:', err);
@@ -304,6 +229,7 @@ export default function CharacterCreate({ user }) {
     }
   };
 
+  // Derived stats
   const selectedClass = CLASSES.find((c) => c.name === identity.class_name) || CLASSES[0];
   const conMod = mod(activeScores.constitution);
   const dexMod = mod(activeScores.dexterity);
@@ -345,8 +271,8 @@ export default function CharacterCreate({ user }) {
         ...(hasRerolled && { rerolled: true }),
       };
       await api.saveCharacter(campaignId, character);
-      await api.saveDraft(campaignId, { ...draftRef.current, step: 2 }).catch(() => {});
-      skipDraftSaveRef.current = true;
+      await saveDraft({ step: 2 });
+      markSkipSave();
       navigate(`/campaigns/${campaignId}/lobby`);
     } catch (err) {
       setError(err.message);
@@ -461,365 +387,17 @@ export default function CharacterCreate({ user }) {
 
       {step === 2 && draftRestored && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Ability Scores</h3>
-
-            {isStandardArray ? (
-              <>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                  Click a slot, then click a value to assign it. Click an assigned slot to return it to the pool.
-                </p>
-
-                {/* Chip pool */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {engine.availableChips.map((chip, i) => (
-                    <button
-                      key={`${chip}-${i}`}
-                      onClick={() => {
-                        if (selectedSlot) {
-                          engine.assign(selectedSlot, chip);
-                          setSelectedSlot(null);
-                        }
-                      }}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
-                        background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
-                        color: 'var(--text-primary)',
-                        fontWeight: 700,
-                        fontSize: 16,
-                        cursor: selectedSlot ? 'pointer' : 'default',
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                  {engine.availableChips.length === 0 && (
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All values assigned</span>
-                  )}
-                </div>
-
-                {/* Ability slots */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                  {ABILITY_KEYS.map((key) => {
-                    const val = engine.scores[key];
-                    const isSelected = selectedSlot === key;
-                    const m = mod(val ?? 10);
-                    return (
-                      <button
-                        key={key}
-                        aria-pressed={isSelected}
-                        onClick={() => {
-                          if (val !== null) {
-                            engine.unassign(key);
-                            setSelectedSlot(null);
-                          } else {
-                            setSelectedSlot(isSelected ? null : key);
-                          }
-                        }}
-                        style={{
-                          textAlign: 'center',
-                          padding: '10px 8px',
-                          background: isSelected ? 'rgba(212,175,55,0.1)' : 'var(--card-bg)',
-                          border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`,
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer',
-                          color: 'inherit',
-                        }}
-                      >
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                          {ABILITY_SHORT[key]}
-                        </div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: val !== null ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 27 }}>
-                          {val !== null ? val : '—'}
-                        </div>
-                        <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
-                          {val !== null ? (m >= 0 ? `+${m}` : m) : ''}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            ) : isPointBuy ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                    Spend points to raise scores ({engine.minScore}–{engine.maxScore}).
-                  </p>
-                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: engine.pointsRemaining >= 0 ? 'var(--gold)' : 'var(--danger)' }}>
-                      {engine.pointsRemaining}
-                    </span>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>pts left</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                  {ABILITY_KEYS.map((key) => {
-                    const displayScore = engine.scores[key] ?? engine.minScore;
-                    const m = mod(displayScore);
-                    const costIncrement = engine.pointBuyCostIncrement(displayScore);
-                    const plusDisabled = displayScore >= engine.maxScore || engine.pointsRemaining < costIncrement;
-                    const minusDisabled = displayScore <= engine.minScore;
-                    return (
-                      <div key={key} className="card" style={{ textAlign: 'center', padding: '10px 8px' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                          {ABILITY_SHORT[key]}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          <button
-                            aria-label={`Decrease ${key}`}
-                            onClick={() => engine.adjustScore(key, -1)}
-                            disabled={minusDisabled}
-                            style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: minusDisabled ? 'not-allowed' : 'pointer', opacity: minusDisabled ? 0.4 : 1, fontWeight: 700, fontSize: 16, lineHeight: 1 }}
-                          >−</button>
-                          <span style={{ fontSize: 18, fontWeight: 700, minWidth: 24 }}>{displayScore}</span>
-                          <button
-                            aria-label={`Increase ${key}`}
-                            onClick={() => engine.adjustScore(key, 1)}
-                            disabled={plusDisabled}
-                            style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: plusDisabled ? 'not-allowed' : 'pointer', opacity: plusDisabled ? 0.4 : 1, fontWeight: 700, fontSize: 16, lineHeight: 1 }}
-                          >+</button>
-                        </div>
-                        <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
-                          {m >= 0 ? `+${m}` : m}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : isRollForStats ? (
-              <>
-                {engine.rollResults.length < 6 ? (
-                  /* ── Roll phase ── */
-                  <>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                      Roll {rollDiceCount}d6, keep highest {rollKeepCount}. Roll each slot individually or all at once.
-                    </p>
-                    <button
-                      className="btn btn-secondary btn-full"
-                      onClick={doRollAll}
-                      disabled={engine.rollResults.length > 0}
-                    >
-                      Roll All
-                    </button>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {Array.from({ length: 6 }, (_, i) => {
-                        const result = engine.rollResults[i];
-                        const sortedDice = result ? [...result.rolls].sort((a, b) => b - a) : [];
-                        return (
-                          <div key={i} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 28, flexShrink: 0 }}>#{i + 1}</span>
-                            {result ? (
-                              <>
-                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                  {sortedDice.map((die, j) => (
-                                    <span
-                                      key={j}
-                                      style={{
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        width: 26, height: 26, borderRadius: 4,
-                                        border: `1px solid ${j < rollKeepCount ? 'var(--gold)' : 'var(--border)'}`,
-                                        color: j < rollKeepCount ? 'var(--gold)' : 'var(--text-muted)',
-                                        textDecoration: j < rollKeepCount ? 'none' : 'line-through',
-                                        fontSize: 13, fontWeight: 600,
-                                      }}
-                                    >
-                                      {die}
-                                    </span>
-                                  ))}
-                                </div>
-                                <span style={{ marginLeft: 'auto', fontSize: 18, fontWeight: 700, color: 'var(--gold)' }}>
-                                  = {result.sum}
-                                </span>
-                              </>
-                            ) : (
-                              <button className="btn btn-sm btn-secondary" onClick={doRoll} style={{ marginLeft: 'auto' }}>
-                                Roll
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  /* ── Assign phase — identical to Standard Array chip UI ── */
-                  <>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                      All scores rolled! Click a slot, then click a value to assign it.
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {engine.availableChips.map((chip, i) => (
-                        <div key={`${chip}-${i}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                          <button
-                            onClick={() => {
-                              if (selectedSlot) {
-                                engine.assign(selectedSlot, chip);
-                                setSelectedSlot(null);
-                              }
-                            }}
-                            style={{
-                              padding: '6px 14px', borderRadius: 6,
-                              border: `2px solid ${selectedSlot ? 'var(--gold)' : 'var(--border)'}`,
-                              background: selectedSlot ? 'rgba(212,175,55,0.15)' : 'var(--card-bg)',
-                              color: 'var(--text-primary)', fontWeight: 700, fontSize: 16,
-                              cursor: selectedSlot ? 'pointer' : 'default',
-                            }}
-                          >
-                            {chip}
-                          </button>
-                          {/* Reroll control under each chip */}
-                          {iAmCreator ? (
-                            confirmingChipIdx === i ? (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button
-                                  className="btn btn-sm"
-                                  style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: '#fff' }}
-                                  onClick={() => {
-                                    const result = rollDice({ sides: 6, count: rollDiceCount, keep: rollKeepCount });
-                                    engine.rerollChip(chip, result);
-                                    setHasRerolled(true);
-                                    setConfirmingChipIdx(null);
-                                  }}
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  className="btn btn-sm"
-                                  style={{ fontSize: 10, padding: '2px 6px' }}
-                                  onClick={() => setConfirmingChipIdx(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                className="btn btn-sm"
-                                style={{ fontSize: 10, padding: '2px 6px' }}
-                                onClick={() => setConfirmingChipIdx(i)}
-                              >
-                                Reroll
-                              </button>
-                            )
-                          ) : (
-                            reroll.status === 'pending' || reroll.status === 'denied' ? (
-                              <button
-                                className="btn btn-sm"
-                                style={{ fontSize: 10, padding: '2px 6px' }}
-                                disabled={reroll.status === 'pending'}
-                                onClick={() => {
-                                  if (reroll.status === 'denied') { reroll.clearDenied(); }
-                                }}
-                              >
-                                {reroll.status === 'pending' ? 'Pending approval…' : 'Denied — request again'}
-                              </button>
-                            ) : confirmingChipIdx === i ? (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button
-                                  className="btn btn-sm"
-                                  style={{ fontSize: 10, padding: '2px 6px', background: 'var(--danger)', color: '#fff' }}
-                                  onClick={() => {
-                                    reroll.requestReroll(chip);
-                                    setConfirmingChipIdx(null);
-                                  }}
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  className="btn btn-sm"
-                                  style={{ fontSize: 10, padding: '2px 6px' }}
-                                  onClick={() => setConfirmingChipIdx(null)}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                className="btn btn-sm"
-                                style={{ fontSize: 10, padding: '2px 6px' }}
-                                onClick={() => setConfirmingChipIdx(i)}
-                              >
-                                Request Reroll
-                              </button>
-                            )
-                          )}
-                        </div>
-                      ))}
-                      {engine.availableChips.length === 0 && (
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All values assigned</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                      {ABILITY_KEYS.map((key) => {
-                        const val = engine.scores[key];
-                        const isSelected = selectedSlot === key;
-                        const m = mod(val ?? 10);
-                        return (
-                          <button
-                            key={key}
-                            aria-pressed={isSelected}
-                            onClick={() => {
-                              if (val !== null) { engine.unassign(key); setSelectedSlot(null); }
-                              else { setSelectedSlot(isSelected ? null : key); }
-                            }}
-                            style={{
-                              textAlign: 'center', padding: '10px 8px',
-                              background: isSelected ? 'rgba(212,175,55,0.1)' : 'var(--card-bg)',
-                              border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`,
-                              borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'inherit',
-                            }}
-                          >
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                              {ABILITY_SHORT[key]}
-                            </div>
-                            <div style={{ fontSize: 18, fontWeight: 700, color: val !== null ? 'var(--text-primary)' : 'var(--text-muted)', minHeight: 27 }}>
-                              {val !== null ? val : '—'}
-                            </div>
-                            <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
-                              {val !== null ? (m >= 0 ? `+${m}` : m) : ''}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                  Enter scores 1–30.
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                  {ABILITY_KEYS.map((key) => {
-                    const m = mod(scores[key]);
-                    return (
-                      <div key={key} className="card" style={{ textAlign: 'center', padding: '10px 8px' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                          {ABILITY_SHORT[key]}
-                        </div>
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={scores[key]}
-                          onChange={(e) => setScore(key, e.target.value)}
-                          style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none' }}
-                        />
-                        <div style={{ fontSize: 14, color: m >= 0 ? 'var(--gold)' : 'var(--danger)', fontWeight: 600 }}>
-                          {m >= 0 ? `+${m}` : m}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
+          <AbilityScorePanel
+            method={abilityScoreMethod}
+            engine={engine}
+            reroll={reroll}
+            iAmCreator={iAmCreator}
+            rollDiceCount={rollDiceCount}
+            rollKeepCount={rollKeepCount}
+            onRerolled={() => setHasRerolled(true)}
+            manualScores={scores}
+            onManualScoreChange={setScore}
+          />
 
           {/* Derived stats preview */}
           <div className="card">

@@ -16,9 +16,9 @@ param githubRepoUrl string = ''
 @description('Branch to deploy from.')
 param githubBranch string = 'main'
 
-@description('Azure AI Search SKU. Use "free" (50 MB) for dev, "basic" (~$75/mo) for production.')
+@description('Azure AI Search SKU. Use "free" (50 MB limit) for current usage, "basic" (~$75/mo) if index grows beyond limit.')
 @allowed(['free', 'basic'])
-param searchSku string = 'basic'
+param searchSku string = 'free'
 
 @description('SignalR SKU. Free_F1 supports 20 concurrent connections; upgrade to Standard_S1 for more.')
 @allowed(['Free_F1', 'Standard_S1'])
